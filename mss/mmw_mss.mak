@@ -97,6 +97,9 @@ mmwMssRTSC:
 mssDemo: BUILD_CONFIGPKG=$(MSS_MMW_DEMO_CONFIGPKG)
 mssDemo: R4F_CFLAGS += --cmd_file=$(BUILD_CONFIGPKG)/compiler.opt \
                        --define=APP_RESOURCE_FILE="<ti/demo/xwr18xx/mmw/mmw_res.h>" \
+					   -i ./mss \
+					   -i ./include \
+					   -i. \
                        --define=DebugP_LOG_ENABLED
 mssDemo: buildDirectories mmwMssRTSC $(MSS_MMW_DEMO_OBJECTS)
 	$(R4F_LD) $(R4F_LDFLAGS) $(MSS_MMW_DEMO_LOC_LIBS) $(MSS_MMW_DEMO_STD_LIBS) 					\

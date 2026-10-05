@@ -7,9 +7,11 @@
 # Setup the VPATH:
 ###################################################################################
 vpath %.c $(MMWAVE_SDK_INSTALL_PATH)/ti/demo/utils \
-          $(MMWAVE_SDK_INSTALL_PATH)/ti/datapath/dpc/objectdetection/objdethwa/src \
+          ./objdethwa/src \
 	  	  $(MMWAVE_SDK_INSTALL_PATH)/ti/board \
-		  ./dss
+		  ./dss \
+		  ./vital_signs_estimation \
+		  $(C64Px_DSPLIB_INSTALL_PATH)/packages/ti/dsplib/src/DSP_mat_mul/c64P
 
 ###################################################################################
 # Additional libraries which are required to build the DEMO:
@@ -19,6 +21,7 @@ DSS_MMW_DEMO_STD_LIBS = $(C674_COMMON_STD_LIB)						\
 		   	-llibmailbox_$(MMWAVE_SDK_DEVICE_TYPE).$(C674_LIB_EXT)		\
 			-llibmmwavealg_$(MMWAVE_SDK_DEVICE_TYPE).$(C674_LIB_EXT)  	\
    			-lmathlib.$(C674_LIB_EXT) 					\
+			-ldsplib.$(C674_LIB_EXT)  					\
 		   	-llibedma_$(MMWAVE_SDK_DEVICE_TYPE).$(C674_LIB_EXT)		\
 		   	-llibhwa_$(MMWAVE_SDK_DEVICE_TYPE).$(C674_LIB_EXT)           	\
 			-llibdpm_$(MMWAVE_SDK_DEVICE_TYPE).$(C674_LIB_EXT) 		\
@@ -46,6 +49,7 @@ DSS_MMW_DEMO_LOC_LIBS = $(C674_COMMON_LOC_LIB)						\
 			-i$(MMWAVE_SDK_INSTALL_PATH)/ti/control/dpm/lib         	\
 			-i$(MMWAVE_SDK_INSTALL_PATH)/ti/utils/mathutils/lib     	\
 			-i$(C674x_MATHLIB_INSTALL_PATH)/packages/ti/mathlib/lib 	\
+			-i$(C674x_DSPLIB_INSTALL_PATH)/packages/ti/dsplib/lib     \
 			-i$(MMWAVE_SDK_INSTALL_PATH)/ti/datapath/dpu/rangeproc/lib          \
 			-i$(MMWAVE_SDK_INSTALL_PATH)/ti/datapath/dpc/dpu/dopplerproc/lib    \
 			-i$(MMWAVE_SDK_INSTALL_PATH)/ti/datapath/dpc/dpu/cfarcaproc/lib     \
@@ -73,7 +77,18 @@ DSS_MMW_DEMO_CMD         = dss/mmw_dss_linker.cmd
 DSS_MMW_DEMO_SOURCES     =  objectdetection.c \
 			    dss_main.c \
 			    data_path.c \
-			    antenna_geometry.c
+			    antenna_geometry.c \
+                3x3inverse.c \
+				dcphasecomp.c \
+				dcphaseremove.c \
+				ellipticFilter.c \
+				matmul.c \
+				meanchirps.c \
+				phaseunwrap.c \
+				transpose.c \
+				vibrationfft.c \
+				vitalsigns.c 
+
 						
 
 DSS_MMW_DEMO_DEPENDS   = $(addprefix $(PLATFORM_OBJDIR)/, $(DSS_MMW_DEMO_SOURCES:.c=.$(C674_DEP_EXT)))
@@ -95,13 +110,29 @@ dssDemo: BUILD_CONFIGPKG=$(DSS_MMW_DEMO_CONFIGPKG)
 dssDemo: C674_CFLAGS += --cmd_file=$(BUILD_CONFIGPKG)/compiler.opt \
                         --define=APP_RESOURCE_FILE="<ti/demo/xwr18xx/mmw/mmw_res.h>" \
                         -i$(C674x_MATHLIB_INSTALL_PATH)/packages \
-						--define=DebugP_LOG_ENABLED
+						-i$(C674x_DSPLIB_INSTALL_PATH)/packages \
+						-i$(C64Px_DSPLIB_INSTALL_PATH)/packages \
+						-i./vital_signs_estimation \
+						-i$(C64Px_DSPLIB_INSTALL_PATH)/packages/ti/dsplib/src/DSP_mat_mul/c64P \
+						-i ./objdethwa \
+						-i ./objdethwa/include \
+						-i ./dss \
+						-i ./include \
+						#--define=DebugP_LOG_ENABLED
 
 dssAOPDemo: BUILD_CONFIGPKG=$(DSS_MMW_DEMO_CONFIGPKG)
 dssAOPDemo: C674_CFLAGS += --cmd_file=$(BUILD_CONFIGPKG)/compiler.opt \
                         --define=APP_RESOURCE_FILE="<ti/demo/xwr18xx/mmw/mmw_res.h>" \
                         -i$(C674x_MATHLIB_INSTALL_PATH)/packages \
-						--define=DebugP_LOG_ENABLED \
+						-i$(C674x_DSPLIB_INSTALL_PATH)/packages \
+						-i$(C64Px_DSPLIB_INSTALL_PATH)/packages \
+						-i./vital_signs_estimation \
+						-i$(C674x_DSPLIB_INSTALL_PATH)/packages/ti/dsplib/src/DSP_mat_mul/c64P \
+						-i ./objdethwa \
+						-i ./objdethwa/include \
+						-i ./dss \
+						-i ./include \
+						#--define=DebugP_LOG_ENABLED \
 						--define=XWR18XX_AOP_ANTENNA_PATTERN \
                         --define=USE_2D_AOA_DPU \
 
