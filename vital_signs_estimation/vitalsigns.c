@@ -29,12 +29,14 @@
 #pragma DATA_SECTION(samplesHeartbeat, ".l3ram");
 */
 
-static float phase [MAX_RANGE];
+static float phase[MAX_RANGE];
 static phaseUnwrapState unwrapState[MAX_RANGE];
 static phaseRemoveState removeState[MAX_RANGE];
-static float phaseBreathing [MAX_RANGE];
+static float phaseBreathing[MAX_RANGE];
+static float magPhaseBreathing [MAX_RANGE];
 static EllipticFilterState breathingState[MAX_RANGE];
-static float phaseHeartbeat [MAX_RANGE];
+static float phaseHeartbeat[MAX_RANGE];
+static float magPhaseHeartbeat[MAX_RANGE];
 static EllipticFilterState heartbeatState[MAX_RANGE];
 static twiddleState wState;
 static vibrationFFTState breathingFFTState;
@@ -67,14 +69,18 @@ void vitalSigns(cmplx16ImRe_t *radarCube, uint16_t range, float *breathingRate, 
         ellipticFilter(&phase[i], &phaseHeartbeat[i], false, &heartbeatState[i]);
     }
 
+    for (i = 0; i < range; i++){
+        magPhaseBreathing[i] = fabsf(phaseBreathing[i]);
+        magPhaseHeartbeat[i] = fabsf(phaseHeartbeat[i]);
+    }
 
-    indexBreathing = DSPF_sp_maxidx(phaseBreathing, range);
-    indexHeartbeat = DSPF_sp_maxidx(phaseHeartbeat, range);
+    indexBreathing = DSPF_sp_maxidx(magPhaseBreathing, range);
+    indexHeartbeat = DSPF_sp_maxidx(magPhaseHeartbeat, range);
     
 
     gen_twiddle_fft_sp(wState.twiddle, N, &wState);
 
-    if (breathingFFTState.sampleCount == 0) {
+    if (breathingFFTState.sampleCount == N) {
         breathingFFTState.chosenBin = indexBreathing;   
         heartbeatFFTState.chosenBin = indexHeartbeat;
     }

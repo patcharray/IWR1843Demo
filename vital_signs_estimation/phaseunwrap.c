@@ -26,9 +26,9 @@ float phaseUnwrap(float *rawPhase, phaseUnwrapState *state){
     } else {
         float diff = *rawPhase - state->prevRaw;
         if (diff > (float) M_PI){
-            state->offset = 2 * (float) M_PI;
+            state->offset += 2 * (float) M_PI;
         } else if (diff < -(float) M_PI){
-            state->offset = - 2 * (float) M_PI;
+            state->offset -=  2 * (float) M_PI;
         }
         state->prevRaw = *rawPhase;
     }

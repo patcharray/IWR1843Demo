@@ -24,7 +24,7 @@ float DCPhaseRemove(float *inputPhase, phaseRemoveState *state){
         state->initialized = 1;
         return 0.0f;
     } else {
-        state->runningMean += 0.05 * (*inputPhase - state->runningMean);
+        state->runningMean += 0.01 * (*inputPhase - state->runningMean);
         return *inputPhase - state->runningMean;
     }
 }
