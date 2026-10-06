@@ -82,6 +82,7 @@ DSS_MMW_DEMO_SOURCES     =  objectdetection.c \
 				dcphasecomp.c \
 				dcphaseremove.c \
 				ellipticFilter.c \
+				findmaxbin.c \
 				matmul.c \
 				meanchirps.c \
 				phaseunwrap.c \

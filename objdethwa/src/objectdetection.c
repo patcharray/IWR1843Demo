@@ -844,8 +844,8 @@ int32_t DPC_ObjectDetection_execute
     DPU_RangeProcHWA_OutParams outRangeProc;
     DPU_StaticClutterProc_OutParams outStaticClutter;
     DPU_DopplerProcHWA_OutParams outDopplerProc;
-    // DPU_CFARCAProcHWA_OutParams outCfarcaProc;
-    // DPU_AoAProcHWA_OutParams outAoaProc;
+    DPU_CFARCAProcHWA_OutParams outCfarcaProc;
+    DPU_AoAProcHWA_OutParams outAoaProc;
     int32_t retVal;
     DPC_ObjectDetection_ExecuteResult *result;
     DPC_ObjectDetection_ProcessCallBackCfg *processCallBack;
@@ -927,7 +927,7 @@ int32_t DPC_ObjectDetection_execute
         }
     }
 
-    // retVal = DPU_CFARCAProcHWA_process(subFrmObj->dpuCFARCAObj, &outCfarcaProc);
+    retVal = DPU_CFARCAProcHWA_process(subFrmObj->dpuCFARCAObj, &outCfarcaProc);
     if (retVal != 0)
     {
         goto exit;
@@ -952,21 +952,22 @@ int32_t DPC_ObjectDetection_execute
         }
     }
 
-    // retVal = DPU_AoAProcHWA_process(subFrmObj->dpuAoAObj, outCfarcaProc.numCfarDetectedPoints, &outAoaProc);
+    retVal = DPU_AoAProcHWA_process(subFrmObj->dpuAoAObj, outCfarcaProc.numCfarDetectedPoints, &outAoaProc);
     if (retVal != 0)
     {
         goto exit;
     }
 
     /* Set DPM result with measure (bias, phase) and detection info */
-    result->numObjOut = 0;
+    result->numObjOut = outAoaProc.numAoADetectedPoints;
     result->subFrameIdx = objDetObj->subFrameIndx;
-    result->objOut               = NULL;
-    result->objOutSideInfo       = NULL;
-    result->azimuthStaticHeatMap = NULL;
-    result->azimuthStaticHeatMapSize = 0;
-    result->radarCube            = subFrmObj->dpuCfg.rangeCfg.hwRes.radarCube;
-    memset(&result->detMatrix, 0, sizeof(result->detMatrix));
+    result->objOut               = subFrmObj->dpuCfg.aoaCfg.res.detObjOut;
+    result->objOutSideInfo       = subFrmObj->dpuCfg.aoaCfg.res.detObjOutSideInfo;
+    result->azimuthStaticHeatMap = subFrmObj->dpuCfg.aoaCfg.res.azimuthStaticHeatMap;
+    result->azimuthStaticHeatMapSize = subFrmObj->dpuCfg.aoaCfg.res.azimuthStaticHeatMapSize;
+    result->radarCube            = subFrmObj->dpuCfg.aoaCfg.res.radarCube;
+    result->detMatrix            = subFrmObj->dpuCfg.dopplerCfg.hwRes.detMatrix;
+
     if (objDetObj->commonCfg.measureRxChannelBiasCfg.enabled == 1)
     {
         result->compRxChanBiasMeasurement = &objDetObj->compRxChanCfgMeasureOut;
@@ -1045,7 +1046,7 @@ static int32_t DPC_ObjDet_reconfigSubFrame(ObjDetObj *objDetObj, uint8_t subFram
     }
 
     DPC_ObjDet_GenDopplerWindow(&subFrmObj->dpuCfg.dopplerCfg);
-    // retVal = DPU_DopplerProcHWA_config(subFrmObj->dpuDopplerObj, &subFrmObj->dpuCfg.dopplerCfg);
+    retVal = DPU_DopplerProcHWA_config(subFrmObj->dpuDopplerObj, &subFrmObj->dpuCfg.dopplerCfg);
     if (retVal != 0)
     {
         goto exit;

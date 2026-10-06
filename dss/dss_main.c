@@ -90,9 +90,10 @@
 
 /**
  * @brief move mean vector to L3SRAM 
- * #pragma DATA_SECTION(mean, ".l3ram");
- * static cmplx16ImRe_t mean[256];
  */
+#pragma DATA_SECTION(mean, ".l3ram");
+static cmplx16ImRe_t mean[256];
+
 
 
 /**
@@ -101,9 +102,9 @@
 #define MMWDEMO_DPC_OBJDET_DPM_TASK_PRIORITY      5
 
 /*! L3 RAM buffer for object detection DPC */
-// #define MMWDEMO_VITALSIGNS_L3RAM_SIZE (80U * 1024U)
+#define MMWDEMO_VITALSIGNS_L3RAM_SIZE (80U * 1024U)
 
-uint8_t gMmwL3[SOC_L3RAM_SIZE];
+uint8_t gMmwL3[SOC_L3RAM_SIZE - MMWDEMO_VITALSIGNS_L3RAM_SIZE];
 #ifndef SOC_XWR68XX
 /* EDMA 4K silicon bug related : Align heap to 4K address boundary so that
  * non heap related changes (such as program code) does not alter the 4K related
@@ -113,7 +114,7 @@ uint8_t gMmwL3[SOC_L3RAM_SIZE];
 #pragma DATA_SECTION(gMmwL3, ".l3ram");
 
  /*! L2 RAM buffer for object detection DPC */
-#define MMWDEMO_OBJDET_L2RAM_SIZE (24U * 1024U)
+#define MMWDEMO_OBJDET_L2RAM_SIZE (49U * 1024U)
 uint8_t gDPC_ObjDetL2Heap[MMWDEMO_OBJDET_L2RAM_SIZE];
 #ifndef SOC_XWR68XX
 /* EDMA 4K silicon bug related : Align heap to 4K address boundary so that
@@ -764,6 +765,10 @@ int main (void)
 
     /* Initialize and populate the demo MCB */
     memset ((void*)&gMmwDssMCB, 0, sizeof(MmwDemo_DSS_MCB));
+
+    
+    /* Initialize Vital Signs Estimation Algorithm */
+    vitalSignsInit();
 
     /* Initialize the SOC confiugration: */
     memset ((void *)&socCfg, 0, sizeof(SOC_Cfg));
