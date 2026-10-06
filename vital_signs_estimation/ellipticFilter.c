@@ -13,7 +13,6 @@ int ellipticFilter(const float *phase, float *filteredPhase, bool characteristic
     float ha1[5];
     float hb2[5];
     float ha2[5];
-    float xPair[2];
 
     const float *sos = characteristic ? sosBreathing : sosHeartbeat;
 
@@ -21,8 +20,6 @@ int ellipticFilter(const float *phase, float *filteredPhase, bool characteristic
         state->pendingInput = *phase;
         state->havePendingInput = 1;
     } else {
-        xPair[0] = state->pendingInput;
-        xPair[1] = *phase;
         state->havePendingInput = 0;
 
         hb1[0] = sos[0];
@@ -36,6 +33,14 @@ int ellipticFilter(const float *phase, float *filteredPhase, bool characteristic
         ha1[2] = sos[5];
         ha1[3] = 0;
         ha1[4] = 0;
+        
+        memmove(state->x1, state->x1 + NR, 4 * sizeof(float));
+        state->x1[4] = state->pendingInput;
+        state->x1[5] = *phase;
+        memmove(state->y1Sec1, state->y1Sec1 + NR, 4 * sizeof(float));
+
+        DSPF_sp_iir(state->y1Sec1, state->x1, state->y2Sec1, hb1, ha1, NR);
+
 
         hb2[0] = sos[6];
         hb2[1] = sos[7];
@@ -49,8 +54,12 @@ int ellipticFilter(const float *phase, float *filteredPhase, bool characteristic
         ha2[3] = 0;
         ha2[4] = 0;
 
-        DSPF_sp_iir(state->y1Sec1, xPair, state->y2Sec1, hb1, ha1, NR);
-        DSPF_sp_iir(state->y1Sec2, state->y2Sec1, state->y2Sec2, hb2, ha2, NR);
+        memmove(state->x2, state->x2 + NR, 4 * sizeof(float));
+        state->x2[4] = state->y2Sec1[0];
+        state->x2[5] = state->y2Sec1[1];
+        memmove(state->y1Sec2, state->y1Sec2 + NR, 4 * sizeof(float));
+
+        DSPF_sp_iir(state->y1Sec2, state->x2, state->y2Sec2, hb2, ha2, NR);
 
         state->outQueue[0] = state->y2Sec2[0];
         state->outQueue[1] = state->y2Sec2[1];

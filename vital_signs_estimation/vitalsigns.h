@@ -7,7 +7,9 @@
 #include <ellipticFilter.h>
 #include <converttocmplx.h>
 #include <vibrationfft.h>
+#include <findmaxbin.h>
 #include <ti/common/sys_types.h>
+#include <string.h>
 
 /* See note in dcphasecomp.h: clear TRUE/FALSE around mathlib, then restore. */
 #undef TRUE
@@ -22,6 +24,7 @@
 #include <ti/dsplib/src/DSPF_sp_maxidx/DSPF_sp_maxidx.h>
 #include <math.h>
 
+void vitalSignsInit(void);
 void vitalSigns(cmplx16ImRe_t *radarCube, uint16_t range, float *breathingRate, float *heartRate);
 
 #endif

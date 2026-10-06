@@ -1,5 +1,11 @@
 #include <dcphasecomp.h>
 
+#define DCPHASECOMP_MAX_RANGE 64
+
+static int16_t AMatrixBuf[DCPHASECOMP_MAX_RANGE * 3];
+static int16_t bBuf[DCPHASECOMP_MAX_RANGE];
+static int16_t inputMatrixTransBuf[DCPHASECOMP_MAX_RANGE * 3];
+
 void createAMatrix(cmplx16ImRe_t *cube, int range, int16_t *outputMatrix){
     int i;
 
@@ -11,7 +17,7 @@ void createAMatrix(cmplx16ImRe_t *cube, int range, int16_t *outputMatrix){
 }
 
 void moorePenrosePseudoinverse(int16_t *inputMatrix, int range, int16_t *outputMatrix){
-    int16_t inputMatrixTrans[3 * range];
+    int16_t *inputMatrixTrans = inputMatrixTransBuf;
     int16_t productMatrix[3 * 3];
     int16_t productInverse[3 * 3];
 
@@ -49,8 +55,8 @@ void subtractCenter(cmplx16ImRe_t *cube, int range, cmplx16ImRe_t *X){
 }
 
 void DSPhaseComp(cmplx16ImRe_t *radarCube, int range){
-    int16_t AMatrix[range * 3];
-    int16_t b[range];
+    int16_t *AMatrix = AMatrixBuf;
+    int16_t *b = bBuf;
     int16_t Y[3];
     cmplx16ImRe_t X;
 

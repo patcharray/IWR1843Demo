@@ -34,15 +34,29 @@ static phaseUnwrapState unwrapState[MAX_RANGE];
 static phaseRemoveState removeState[MAX_RANGE];
 static float phaseBreathing[MAX_RANGE];
 static float magPhaseBreathing [MAX_RANGE];
+#pragma DATA_ALIGN(breathingState, 8);
 static EllipticFilterState breathingState[MAX_RANGE];
 static float phaseHeartbeat[MAX_RANGE];
 static float magPhaseHeartbeat[MAX_RANGE];
+#pragma DATA_ALIGN(heartbeatState, 8);
 static EllipticFilterState heartbeatState[MAX_RANGE];
 static twiddleState wState;
 static vibrationFFTState breathingFFTState;
 static vibrationFFTState heartbeatFFTState;
 static float samplesBreathing[N];
 static float samplesHeartbeat[N];
+
+void vitalSignsInit(void){
+    memset(unwrapState, 0, sizeof(unwrapState));
+    memset(removeState, 0, sizeof(removeState));
+    memset(&breathingState, 0, sizeof(breathingState));
+    memset(&heartbeatState, 0, sizeof(heartbeatState));
+    memset(&wState, 0, sizeof(wState));
+    memset(&breathingFFTState, 0, sizeof(breathingFFTState));
+    memset(&heartbeatFFTState, 0, sizeof(heartbeatFFTState));
+    memset(samplesBreathing, 0, sizeof(samplesBreathing));
+    memset(samplesHeartbeat, 0, sizeof(samplesHeartbeat));
+}
 
 
 void vitalSigns(cmplx16ImRe_t *radarCube, uint16_t range, float *breathingRate, float *heartRate){
@@ -90,7 +104,8 @@ void vitalSigns(cmplx16ImRe_t *radarCube, uint16_t range, float *breathingRate, 
 
 
 
-    *breathingRate = (((float) DSPF_sp_maxidx(samplesBreathing, N) * sampFreq) / N) * 60;
-    *heartRate = (((float) DSPF_sp_maxidx(samplesHeartbeat, N) * sampFreq) / N) * 60;
+    *breathingRate = (((float) findMaxBin(samplesBreathing, BREATH_BIN_MIN, BREATH_BIN_MAX) * sampFreq) / N) * 60;
+    *heartRate = (((float) findMaxBin(samplesHeartbeat, HEART_BIN_MIN, HEART_BIN_MAX) * sampFreq) / N) * 60;
 
 }
+
