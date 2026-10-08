@@ -1,22 +1,10 @@
 #include <dcphaseremove.h>
-/*
-void DCPhaseRemove(float *phase, int range){
-    float sum = 0;
-    float mean = 0;
-    int i;
 
-    for(i = 0; i < range; i++){
-        sum += phase[i];
-    }
-
-    mean = (float) sum / range;
-
-    for(i = 0; i < range; i++){
-        phase[i] -= mean;
-    }
-}
-*/
-
+/***************************************************************************************************************
+ *                                           DESCRIPTION 
+ * Removes the DC offset along phase axis in real time via running mean.
+ *
+ ***************************************************************************************************************/
 
 float DCPhaseRemove(float *inputPhase, phaseRemoveState *state){
     if (!state->initialized){
@@ -24,7 +12,7 @@ float DCPhaseRemove(float *inputPhase, phaseRemoveState *state){
         state->initialized = 1;
         return 0.0f;
     } else {
-        state->runningMean += 0.01 * (*inputPhase - state->runningMean);
-        return *inputPhase - state->runningMean;
+        state->runningMean += 0.01 * (*inputPhase - state->runningMean); // 0.01 is the steepness factor 
+        return *inputPhase - state->runningMean;                         // Can be adjusted, but 0.01 works well
     }
 }

@@ -1,5 +1,27 @@
 #include <vibrationfft.h>
 
+/* 
+ * DSPF_sp_fftSPxSP() returns complex spectrum, thus fftOutput serves as the 
+ * intermediate stage
+ */
+#pragma DATA_SECTION(fftOutput, ".l3ram");
+#pragma DATA_ALIGN(fftOutput, 8);
+static float fftOutput[2 * N];
+
+/* 
+ * DSPF_sp_fftSPxSP() uses its "input" as in-place scratch: it writes its butterfly
+ * results back over the input for every stage but the last. So, every time the
+ * function executes, the input vector is copied into fftScratch
+ */
+#pragma DATA_SECTION(fftScratch, ".l3ram");
+#pragma DATA_ALIGN(fftScratch, 8);
+static float fftScratch[2 * N];
+
+/*
+ * Radix-4 returns the coefficients in reverse order, the bit-reversal table (brev)
+ * reorders them
+ */
+#pragma DATA_ALIGN(brev, 8);
 static unsigned char brev[64] = {
     0x0, 0x20, 0x10, 0x30, 0x8, 0x28, 0x18, 0x38,
     0x4, 0x24, 0x14, 0x34, 0xc, 0x2c, 0x1c, 0x3c,
@@ -12,22 +34,8 @@ static unsigned char brev[64] = {
 };
 
 /*
-int bufferState(float newSample){
-
-    sampleBuffer[2*sampleCount]     = newSample;
-    sampleBuffer[2*sampleCount + 1] = 0.0f;
-    sampleCount++;
-
-    if (sampleCount < N){
-        return 0;
-    }
-    else {
-        sampleCount = 0;
-        return 1;
-    }
-}
-*/
-
+ * Taken from ti/dsplib_c674x_3_4_0_0/examples/fft_sp_ex/fft_example_sp.c
+ */
 void gen_twiddle_fft_sp(float *w, int n, twiddleState *state)
 {
     if (!state->initialized){
@@ -47,34 +55,26 @@ void gen_twiddle_fft_sp(float *w, int n, twiddleState *state)
 
 }
 
-/*
-void vibrationFFT(float newSample, const float *w, float *outputSpectrum){
-    if (bufferState(newSample)){
-        float fftOutput [2 * N];
-        DSPF_sp_fftSPxSP(N, sampleBuffer, w, fftOutput, brev, 4, 0, N);
-        int i; 
-        for (i = 0; i < N; i++){
-            outputSpectrum[i] = sqrtsp(fftOutput[2*i]*fftOutput[2*i] + fftOutput[2*i+1]*fftOutput[2*i+1]);
-
-        }
-    }
-
-}
-*/
+/***************************************************************************************************************
+ *                                           DESCRIPTION 
+ * Complex Radix-4 FFT over the samples of the chosen bin. Runs every sample, removing the oldest sample, 
+ * shifting other samples and appending new sample. Needs to fill its sample buffer first in order to execute.
+ *
+ ***************************************************************************************************************/
 
 void vibrationFFT(float newSample, float *w, float *outputSpectrum, vibrationFFTState *state){
     if (state->sampleCount < N){
-        state->sampleBuffer[2 * state->sampleCount] = newSample;
+        state->sampleBuffer[2 * state->sampleCount] = newSample; // Fills the buffer
         state->sampleBuffer[2 * state->sampleCount + 1] = 0.0f;
         state->sampleCount++;
     } else {
-        memmove(state->sampleBuffer, state->sampleBuffer + 2, (N - 1) * 2 * sizeof(float));
-        state->sampleBuffer[2 * (N - 1)] = newSample;
+        memmove(state->sampleBuffer, state->sampleBuffer + 2, (N - 1) * 2 * sizeof(float)); // Shift N-1 samples
+        state->sampleBuffer[2 * (N - 1)] = newSample; // Appends new sample
         state->sampleBuffer[2 * (N - 1) + 1] = 0.0f;
-        float fftOutput [2 * N];
         int i;
-        DSPF_sp_fftSPxSP(N, state->sampleBuffer, w, fftOutput, brev, 4, 0, N);
-        for (i = 0; i < N; i++){
+        memcpy(fftScratch, state->sampleBuffer, 2 * N * sizeof(float)); // Copies the buffer (see fftScratch description)
+        DSPF_sp_fftSPxSP(N, fftScratch, w, fftOutput, brev, 4, 0, N);
+        for (i = 0; i < N; i++){ // Takes magnitude of each sample (see fftOutput description)
             outputSpectrum[i] = sqrtsp(fftOutput[2 * i] * fftOutput[2 * i] + fftOutput[2 * i + 1] * fftOutput[2 * i + 1]);
         }
 

@@ -5,7 +5,9 @@
 #include <math.h>
 #include <string.h>
 
-/* See note in dcphasecomp.h: clear TRUE/FALSE around mathlib, then restore. */
+/* 
+ * See note in dcphasecomp.h: clear TRUE/FALSE around mathlib, then restore
+ */
 #undef TRUE
 #undef FALSE
 #include <ti/mathlib/mathlib.h>
@@ -14,16 +16,17 @@
 #define TRUE  1U
 #define FALSE 0U
 
-#define N 256
+#define N 256 // Number of samples
 
-typedef struct{
-    int initialized;
+
+typedef struct{           // Struct containing twiddle initialization
     float twiddle[2 * N];
+    int initialized;
 } twiddleState;
 
-typedef struct{
-    float sampleBuffer[2 * N];
-    int sampleCount;
+typedef struct{                // Struct containing FFT buffer and bin, 
+    float sampleBuffer[2 * N]; // for which the vibration (doppler) FFT
+    int sampleCount;           // will execute
     int chosenBin;
 }   vibrationFFTState;
 

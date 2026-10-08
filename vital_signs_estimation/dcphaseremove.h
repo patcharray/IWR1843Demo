@@ -1,7 +1,7 @@
 #ifndef DCPHASEREMOVE_H
 #define DCPHASEREMOVE_H
 
-typedef struct{
+typedef struct{         // struct for saving the current mean 
     float runningMean;
     int initialized;
 } phaseRemoveState;
