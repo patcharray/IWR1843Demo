@@ -2,10 +2,8 @@
 
 /***************************************************************************************************************
  *                                          DESCRIPTION
- * After atan2sp() phase can only take values in a range (-pi, pi], but the physical displacement of a chest 
- * can be greater than wavelength/4, therefore the abrupt changes (jumps) in phase may occur. If the difference
- * between two neighbouring phase samples is greater than abs(pi), the algorithm adds/subtracts 2*pi and the
- * offset accumulated by the previous samples.
+ * If the difference between two neighbouring phase samples is greater than abs(pi), the algorithm
+ * adds/subtracts 2*pi and the offset accumulated by the previous samples.
  * For example: phase[i] = 0.8pi, phase[i+1] = -0.9pi
  *              --> phase[i+1] - phase[i] = -1.7pi < -pi
  *              --> phase[i] += 2*pi = 1.1*pi
