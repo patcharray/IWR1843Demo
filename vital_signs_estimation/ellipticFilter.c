@@ -1,78 +1,49 @@
 #include <ellipticFilter.h>
 
+/* 
+ * Second-order section coefficients derived for elliptic filter using scipy.signal.ellip() function
+ */
+static const float sosBreathing[12] = {
+    0.03801253f, -0.03652015f, 0.03801253f, 1.0f, -1.77809882f, 0.85359061f,
+    1.0f,        -1.9997177f,  1.0f,        1.0f, -1.95749091f, 0.96216252f
+};
 
+static const float sosHeartbeat[12] = {
+    0.09457149f,  0.1264823f,   0.09457149f, 1.0f, -0.63600174f, 0.69454343f,
+    1.0f,        -1.97255535f,  1.0f,        1.0f, -1.55940984f, 0.81818437f
+};
+
+/***************************************************************************************************************
+ *                                           DESCRIPTION 
+ * Direct-Form II Transposed 2nd Order Biquad Elliptic (Cauer) Filter
+ *                  | Breathing  | Heartbeat| 
+ *    Bandwidth     | 0.1-0.5 Hz | 0.8-2 Hz |
+ *   Max. Ripple    |    2dB     |    2dB   |
+ * Min. Attenuation |    30dB    |    30dB  |
+ *
+ * Direct Form II allows the sequential connection of filters, so the output of first filter is connected to
+ * the input of the second 
+ ***************************************************************************************************************/
+ 
 int ellipticFilter(const float *phase, float *filteredPhase, bool characteristic, EllipticFilterState *state){
-
-    static const float sosBreathing[12] = {0.03801253f, -0.03652015f, 0.03801253f, 1,       -1.77809882f, 0.85359061f,
-                                            1,           -1.9997177f,  1,           1,       -1.95749091f, 0.96216252f};
-
-    static const float sosHeartbeat[12] =  {0.09457149f, 0.1264823f,   0.09457149f, 1,       -0.63600174f, 0.69454343f,
-                                             1,           -1.97255535f, 1,           1,       -1.55940984f, 0.81818437f};
-
-    float hb1[5];
-    float ha1[5];
-    float hb2[5];
-    float ha2[5];
-
     const float *sos = characteristic ? sosBreathing : sosHeartbeat;
+    float x = *phase;
+    int section;
 
-    if(!state->havePendingInput){
-        state->pendingInput = *phase;
-        state->havePendingInput = 1;
-    } else {
-        state->havePendingInput = 0;
+    for (section = 0; section < 2; section++){
+        const float *c = &sos[section * 6];
+        float b0 = c[0];
+        float b1 = c[1];
+        float b2 = c[2];
+        float a1 = c[4];
+        float a2 = c[5];
+        float y  = b0 * x + state->z1[section];
 
-        hb1[0] = sos[0];
-        hb1[1] = sos[1];
-        hb1[2] = sos[2];
-        hb1[3] = 0;
-        hb1[4] = 0;
-
-        ha1[0] = 0;
-        ha1[1] = sos[4];
-        ha1[2] = sos[5];
-        ha1[3] = 0;
-        ha1[4] = 0;
-        
-        memmove(state->x1, state->x1 + NR, 4 * sizeof(float));
-        state->x1[4] = state->pendingInput;
-        state->x1[5] = *phase;
-        memmove(state->y1Sec1, state->y1Sec1 + NR, 4 * sizeof(float));
-
-        DSPF_sp_iir(state->y1Sec1, state->x1, state->y2Sec1, hb1, ha1, NR);
-
-
-        hb2[0] = sos[6];
-        hb2[1] = sos[7];
-        hb2[2] = sos[8];
-        hb2[3] = 0;
-        hb2[4] = 0;
-
-        ha2[0] = 0;
-        ha2[1] = sos[10];
-        ha2[2] = sos[11];
-        ha2[3] = 0;
-        ha2[4] = 0;
-
-        memmove(state->x2, state->x2 + NR, 4 * sizeof(float));
-        state->x2[4] = state->y2Sec1[0];
-        state->x2[5] = state->y2Sec1[1];
-        memmove(state->y1Sec2, state->y1Sec2 + NR, 4 * sizeof(float));
-
-        DSPF_sp_iir(state->y1Sec2, state->x2, state->y2Sec2, hb2, ha2, NR);
-
-        state->outQueue[0] = state->y2Sec2[0];
-        state->outQueue[1] = state->y2Sec2[1];
-        state->outQueueLen = 2;
-
+        state->z1[section] = b1 * x - a1 * y + state->z2[section];
+        state->z2[section] = b2 * x - a2 * y;
+        x = y;
     }
 
-    if (state->outQueueLen > 0){
-        *filteredPhase = state->outQueue[2 - state->outQueueLen];
-        state->outQueueLen--;
-        return 1;
-    }
-
-    return 0;
-
+    *filteredPhase = x;
+    return 1;
 }

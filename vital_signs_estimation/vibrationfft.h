@@ -6,7 +6,8 @@
 #include <string.h>
 
 /* 
- * See note in dcphasecomp.h: clear TRUE/FALSE around mathlib, then restore
+ * mathlib's common.h redefines TRUE/FALSE (as ((t_bool)true)/((t_bool)false))
+ * which clashes with xdc/std.h's 1U/0U.
  */
 #undef TRUE
 #undef FALSE
@@ -24,8 +25,8 @@ typedef struct{           // Struct containing twiddle initialization
     int initialized;
 } twiddleState;
 
-typedef struct{                // Struct containing FFT buffer and bin, 
-    float sampleBuffer[2 * N]; // for which the vibration (doppler) FFT
+typedef struct{                // Struct containing FFT buffer and  
+    float sampleBuffer[2 * N]; // bin for which the vibration (doppler) FFT
     int sampleCount;           // will execute
     int chosenBin;
 }   vibrationFFTState;
