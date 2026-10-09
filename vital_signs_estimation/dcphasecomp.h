@@ -28,6 +28,6 @@ void getAbs(cmplx16ImRe_t *inputVector, int range, int16_t *abs);
 void getYVector(int16_t *inputMatrix, int16_t *b, int16_t *Y);
 void getCenter(int16_t *Y, cmplx16ImRe_t *X);
 void subtractCenter(cmplx16ImRe_t *cube, int range, cmplx16ImRe_t *X);
-void DSPhaseComp(cmplx16ImRe_t *radarCube, int range);
+void DCPhaseComp(cmplx16ImRe_t *radarCube, int range);
 
 #endif

@@ -10,8 +10,8 @@ static float fftOutput[2 * N];
 
 /* 
  * DSPF_sp_fftSPxSP() uses its "input" as in-place scratch: it writes its butterfly
- * results back over the input for every stage but the last. So, every time the
- * function executes, the input vector is copied into fftScratch
+ * results back over the input for every stage but the last. To avoid it,
+ * every time the function executes, the input vector is copied into fftScratch
  */
 #pragma DATA_SECTION(fftScratch, ".l3ram");
 #pragma DATA_ALIGN(fftScratch, 8);
@@ -74,7 +74,7 @@ void vibrationFFT(float newSample, float *w, float *outputSpectrum, vibrationFFT
         int i;
         memcpy(fftScratch, state->sampleBuffer, 2 * N * sizeof(float)); // Copies the buffer (see fftScratch description)
         DSPF_sp_fftSPxSP(N, fftScratch, w, fftOutput, brev, 4, 0, N);
-        for (i = 0; i < N; i++){ // Takes magnitude of each sample (see fftOutput description)
+        for (i = 0; i < N; i++){ // Takes magnitude of each output sample (see fftOutput description)
             outputSpectrum[i] = sqrtsp(fftOutput[2 * i] * fftOutput[2 * i] + fftOutput[2 * i + 1] * fftOutput[2 * i + 1]);
         }
 

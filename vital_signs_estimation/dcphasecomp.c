@@ -54,7 +54,7 @@ void subtractCenter(cmplx16ImRe_t *cube, int range, cmplx16ImRe_t *X){
     }
 }
 
-void DSPhaseComp(cmplx16ImRe_t *radarCube, int range){
+void DCPhaseComp(cmplx16ImRe_t *radarCube, int range){
     int16_t *AMatrix = AMatrixBuf;
     int16_t *b = bBuf;
     int16_t Y[3];
