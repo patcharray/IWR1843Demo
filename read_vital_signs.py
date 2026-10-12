@@ -26,7 +26,7 @@ TLV_HEARTRATE = 11
 
 DATA_PORT_BAUD = 921600
 
-RANGE_RESOLUTION = 0.042
+RANGE_RESOLUTION = 0.168
 
 def sync_to_magic_word(ser):
     window = bytearray()
