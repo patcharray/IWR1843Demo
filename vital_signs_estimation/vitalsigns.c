@@ -1,38 +1,48 @@
 /***************************************************************************************************************
  *                                           DESCRIPTION 
  * The signal processing chain for breathing rate and heartrate detection/estimation for stationary targets.
+ * Begins to stream results ~30 seconds after startup every 100ms. That implies some limitations in detection
+ * and tracking ability. For the specs of chirp/frame configuration, see profiles/profile_2d.cfg
  * 
  * 1. RANGE FFT
- * 2. PHASE EXTRACTION (GETS CALLED EACH FRAME FOR EACH RANGE BIN ALONG SLOW-TIME AXIS (ACROSS ALL SAMPLES))
+ *    
+ *
+ * 2. PHASE EXTRACTION (GETS CALLED EACH FRAME FOR EACH RANGE BIN ALONG SLOW-TIME AXIS ACROSS ALL SAMPLES)
  *    Chest and heart movements are too small to cause a substantial magnitude change, therefore the extreme 
  *    sensitivity of phase is exploited in order to detect them. 
  *
- * 2. PHASE UNWRAPPING (GETS CALLED EACH FRAME FOR EACH RANGE BIN ALONG SLOW-TIME AXIS (ACROSS ALL SAMPLES))
+ * 2. PHASE UNWRAPPING (GETS CALLED EACH FRAME FOR EACH RANGE BIN ALONG SLOW-TIME AXIS ACROSS ALL SAMPLES)
  *    After the unwrapping the phase can only take values in a range (-pi, pi], but the physical displacement 
  *    of the chest can be greater than wavelength/4, therefore abrupt changes (jumps) in phase may occur.
  *
- * 3. DC PHASE REMOVAL (GETS CALLED EACH FRAME FOR EACH RANGE BIN ALONG SLOW-TIME AXIS (ACROSS ALL SAMPLES))
+ * 3. DC PHASE REMOVAL (GETS CALLED EACH FRAME FOR EACH RANGE BIN ALONG SLOW-TIME AXIS ACROSS ALL SAMPLES)
  *    After the unwrapping, the sum of all sampled phases does not equal zero -> DC element is present in all
  *    samples. To mitigate it, the running mean is calculated and subtracted in real time, thus saving 
  *    memory
  *
- * 4. PHASE DIFFERENCING (EXACT FIRST-ORDER HIGH-PASS; REMOVES THE SLOW DRIFT THAT THE BANDPASS TRANSITION BAND CANNOT)
+ * 4. PHASE DIFFERENCING (GETS CALLED EACH FRAME FOR EACH RANGE BIN ALONG SLOW-TIME AXIS ACROSS ALL SAMPLES)
  *    The measured phase carries a drift tens of times larger than the chest displacement -> unwrap random-walk
- *    and real target motion. Functions as an exact first-order high-pass
+ *    and real target motion. Functions as an exact first-order high-pass that greatly supresses lower bins 
  *
- * 5. FILTERING (GETS CALLED EACH FRAME FOR EACH RANGE BIN ALONG SLOW-TIME AXIS (ACROSS ALL SAMPLES))
+ * 5. FILTERING (GETS CALLED EACH FRAME FOR EACH RANGE BIN ALONG SLOW-TIME AXIS ACROSS ALL SAMPLES)
+ *    The phase samples get filtered by two elliptic bandpass filters tuned to a frequencies of breathing 
+ *    and heartbeat, in order to get rid of the high-frequency noise
  *
+ * 6. PEAK DETECTION (GETS CALLED ONCE AFTER THE WARMUP FOR EACH RANGE BIN ALONG SLOW-TIME AXIS FOR THE FIRST SAMPLE)
+ *    Because of the limitations of the hardware, not the whole range, but only the bin with the largest 
+ *    magnitude after the filtering is picked for further processing. Once the bin is chosen, it cannot be changed,
+ *    so if the position of the target has changed, the board has to be restarted.
+ *    
+ * 7. VIBRATION FFT (GETS CALLED AFTER THE SETTLING TIME ALONG FAST-TIME(SAMPLE) AXIS EVERY NEW SAMPLE)
+ *    Transforms the samples of the chosen bin and outputs them in a frequency(beats per second)-magnitude ratio
  *
- * 6. PEAK DETECTION (GETS CALLED EACH FRAME)
+ * 8. PEAK DETECTION (GETS CALLED AFTER THE SETTLING TIME ALONG FAST-TIME(SAMPLE) AXIS EVERY NEW SAMPLE)
+ *    To find the target, the bin with the largest magnitude is chosen and multiplied by 60 (beats per minute)
  *
+ * 9. MEDIAN (GETS CALLED AFTER THE SETTLING TIME ALONG FAST-TIME(SAMPLE) AXIS EVERY NEW SAMPLE)
+ *    To minimize the impact of outliers (extraordinary high and low values), the last 15 values are stored in 
+ *    a circular buffer, insertion sorted and median is taken
  *
- * 7. VIBRATION FFT (GETS CALLED ONCE ENOUGH SAMPLES HAVE BEEN ACCUMMULATED ALONG SLOW-TIME AXIS FOR THE CHOSEN BIN)
- *
- *
- * 8. PEAK DETECTION ()
- *
- *
- * 
  ***************************************************************************************************************/
 #include <vitalsigns.h>
 
@@ -47,73 +57,76 @@
 
 /* 
  * The chain has to settle before any of it means anything:
- *  - DCPhaseRemove is an EMA with alpha = 0.01, i.e. tau ~ 10 s;
- *  - the breathing SOS cascade has a pole radius of sqrt(0.96216) and needs
+ *  1. DCPhaseRemove is an EMA with alpha = 0.01, i.e. time constant ~ 10 s;
+ *  2. the breathing SOS cascade has a pole radius of sqrt(0.96216) and needs
  *    ~26 s to settle.
  * Feeding the vibration FFT before that just buries the band in transients
  */
-/* Diagnostic mode: instead of rates, stream the DC-removed unwrapped phase at
+/* 
+ * Diagnostic mode: instead of rates, stream the DC-removed unwrapped phase at
  * the locked range bin (float 1) and the locked bin index itself (float 2), so
  * the slow-time signal can be logged and analysed off-target. Set to 0 for
- * normal operation. */
+ * normal operation.
+ */
 #define VITALSIGNS_DIAG 0
 
 #if VITALSIGNS_DIAG
-#define WARMUP_FRAMES  150             /* 15 s -- just the EMA, not the SOS */
+#define WARMUP_FRAMES  150             /* 15 s -> just the EMA, not the SOS */
 #else
 #define WARMUP_FRAMES  300             /* 30 s at 10 Hz */
 #endif
 
-/* Afterwards, accumulate filtered energy per range bin for this long and pick
+/* 
+ * Afterwards, accumulate filtered energy per range bin for this long and pick
  * the strongest bin ONCE. The bin must not move after that: the FFT window is
  * 256 samples of slow time, so re-selecting per frame splices unrelated bins
- * into one window and destroys the coherence the FFT depends on. */
+ * into one window and destroys the coherence the FFT depends on 
+ */
 #if VITALSIGNS_DIAG
 #define SELECT_FRAMES  50              /* 5 s at 10 Hz */
 #else
 #define SELECT_FRAMES  100             /* 10 s at 10 Hz */
 #endif
 
-/* Window of range bins the subject is expected to occupy.
- *
+/* 
+ * Window of range bins the subject is expected to occupy.
  * Bin spacing follows from profileCfg: freqSlopeConst 100 MHz/us over an ADC
  * window of 64/7.2 MHz = 8.889 us gives a 888.9 MHz sweep, so
- *     dr = c / (2 * 888.9 MHz) = 0.169 m per bin
- * and the 64 bins span 10.8 m. (The comment block at the top of
- * profile_2d.cfg claims 0.042 m/bin; that is stale and wrong by 4x.)
+ *     dr = c / (2 * 888.9 MHz) = 0.168 m per bin
+ * and the 64 bins span 10.8 m. 
  *
- * Bins 0..2 are dominated by TX->RX leakage -- large, nearly static phase that
+ * Bins 0:2 are dominated by TX->RX leakage -> large, nearly static phase that
  * would always win an energy contest. Beyond ~2 m there is nothing to measure
  * in a room, and letting the selector roam that far is how it locked onto bin
  * 26 (4.4 m) and bin 62 (10.5 m) on earlier runs. Widen RANGE_BIN_MAX if the
- * subject sits further away. */
-#define RANGE_BIN_MIN  3     /* ~0.51 m */
-#define RANGE_BIN_MAX  8    /* ~1.42 m */
+ * subject sits further away 
+ */
+#define RANGE_BIN_MIN  3     // ~0.51 m
+#define RANGE_BIN_MAX  8     // ~1.42 m
 
-/* Median window over the reported rate.
+/* 
+ * Median window over the reported rate.
  *
  * The slow-time window holds 256 samples and advances by one per frame, so
  * successive spectra are nearly identical and a one-frame jump in the argmax
- * is not a change in the signal -- it is two bins sitting nearly level with
+ * is not a change in the signal -> it is two bins sitting nearly level with
  * noise deciding between them. A median rejects those isolated flips outright
  * while still passing a genuine step in rate, which an average would smear.
- * Odd length so the median is a real sample; 15 frames costs 0.75 s of lag. */
+ * Odd length so the median is a real sample; 15 frames costs 0.75 s of lag 
+ */
 #define RATE_MEDIAN_LEN 15
 
-/* Reported in place of a rate so the host can tell *why* there is no rate yet,
+/* 
+ * Reported in place of a rate so the host can tell *why* there is no rate yet,
  * and so a stale flash image is immediately obvious (it reports 0.0 instead).
- * During VS_STATE_FILLING the heart-rate slot carries the locked range bin. */
-#define VS_STATE_WARMUP    (-1.0f)   /* filters still settling */
-#define VS_STATE_SELECTING (-2.0f)   /* accumulating per-bin energy */
-#define VS_STATE_FILLING   (-3.0f)   /* slow-time window not full yet */
-#define VS_STATE_NONFINITE (-4.0f)   /* in-band spectrum has a NaN/Inf */
-#define VS_STATE_SILENT    (-5.0f)   /* in-band spectrum identically zero */
+ * During VS_STATE_FILLING the heart-rate slot carries the locked range bin 
+ */
+#define VS_STATE_WARMUP    (-1.0f)   // filters still settling 
+#define VS_STATE_SELECTING (-2.0f)   // accumulating per-bin energy 
+#define VS_STATE_FILLING   (-3.0f)   // slow-time window not full yet 
+#define VS_STATE_NONFINITE (-4.0f)   // in-band spectrum has a NaN/Inf 
+#define VS_STATE_SILENT    (-5.0f)   // in-band spectrum identically zero 
 
-/* Temporary: locate where a NaN/Inf first enters the chain. Once a stage goes
- * non-finite the IIR state latches it forever, so only the FIRST occurrence
- * tells us anything -- hence the latch. Reports -(100 + stage) in the breathing
- * slot and the offending range bin in the heart slot. Set to 0 to remove. */
-#define VITALSIGNS_TRACE_NONFINITE 0
 
 #define VS_STAGE_ATAN2      1
 #define VS_STAGE_UNWRAP     2
@@ -134,8 +147,8 @@
 #pragma DATA_SECTION(phaseHeartbeat, ".l3ram");
 #pragma DATA_SECTION(heartbeatState, ".l3ram");
 #pragma DATA_SECTION(energyBreathing, ".l3ram");
-// #pragma DATA_SECTION(energyHeartbeat, ".l3ram");
-#pragma DATA_SECTION(wState, ".l3ram");
+// #pragma DATA_SECTION(energyHeartbeat, ".l3ram");      // the heartbeat signal is weak, so the bin localization  
+#pragma DATA_SECTION(wState, ".l3ram");                  // has been put solely on breathing signal
 #pragma DATA_SECTION(breathingFFTState, ".l3ram");
 #pragma DATA_SECTION(heartbeatFFTState, ".l3ram");
 #pragma DATA_SECTION(samplesBreathing, ".l3ram");
@@ -197,67 +210,12 @@ void vitalSignsInit(void){
     rateHistoryIdx = 0;
     frameCount = 0;
     binLocked  = 0;
-#if VITALSIGNS_TRACE_NONFINITE
-    faultStage = 0;
-    faultBin   = -1;
-#endif
 }
 
 
-
-#if VITALSIGNS_TRACE_NONFINITE
-/* Index of the first NaN or Inf in v[0..n), else -1. NaN is detected via the
- * one value that compares unequal to itself; Inf via magnitude. */
-static int firstNonFinite(const float *v, int n){
-    int i;
-    for (i = 0; i < n; i++){
-        float f = v[i];
-        if (f != f){
-            return i;
-        }
-        if ((f > 3.0e38f) || (f < -3.0e38f)){
-            return i;
-        }
-    }
-    return -1;
-}
-
-/* Largest magnitude in v[0..n), or the NaN itself if one is present, so the
- * host sees either a real scale or a NaN rather than a bucketed verdict. */
-static float maxAbsOrNan(const float *v, int n){
-    int i;
-    float m = 0.0f;
-    for (i = 0; i < n; i++){
-        float f = v[i];
-        if (f != f){
-            return f;
-        }
-        if (f < 0.0f){
-            f = -f;
-        }
-        if (f > m){
-            m = f;
-        }
-    }
-    return m;
-}
-
-/* Latch only the earliest fault: later stages are downstream consequences. */
-static void traceStage(int stage, const float *v, int n){
-    int idx;
-    if (faultStage != 0){
-        return;
-    }
-    idx = firstNonFinite(v, n);
-    if (idx >= 0){
-        faultStage = stage;
-        faultBin   = idx;
-    }
-}
-#endif
-
-/* Median of the first n entries. Insertion sort on a copy: n is 15, so this is
- * cheaper and clearer than anything asymptotically better. */
+/* 
+ * Median of the first n entries. Insertion sort on a copy
+ */
 static float medianOf(const float *history, int n){
     float tmp[RATE_MEDIAN_LEN];
     int i, j;
@@ -276,10 +234,12 @@ static float medianOf(const float *history, int n){
 }
 
 
-/* Peak bin -> rate in units per minute, but first separate a genuine peak from
+/* 
+ * Peak bin -> rate in units per minute, but first separate a genuine peak from
  * the two degenerate cases that both collapse onto the band's lowest bin: a
  * spectrum poisoned by NaN/Inf, and one that is identically zero. Without this
- * the two are indistinguishable from a real reading at the band edge. */
+ * the two are indistinguishable from a real reading at the band edge 
+ */
 static float bandRate(const float *spectrum, int lo, int hi){
     int i;
     int nonFinite = 0;
@@ -321,11 +281,7 @@ void vitalSigns(cmplx16ImRe_t *radarCube, uint16_t range, float *breathingRate, 
     for (i = 0; i < range; i++){
         phase[i] = atan2sp(radarCube[i].imag, radarCube[i].real);
     }
-
-#if VITALSIGNS_TRACE_NONFINITE
-    traceStage(VS_STAGE_ATAN2, phase, range);
-#endif
-
+    
 
     /*
      * Phase unwrapping (to learn more see phaseunwrap.c and phaseunwrap.h)
@@ -333,10 +289,6 @@ void vitalSigns(cmplx16ImRe_t *radarCube, uint16_t range, float *breathingRate, 
     for (i = 0; i < range; i++){
         phase[i] = phaseUnwrap(&phase[i], &unwrapState[i]);
     }
-
-#if VITALSIGNS_TRACE_NONFINITE
-    traceStage(VS_STAGE_UNWRAP, phase, range);
-#endif
 
 
     /*
@@ -346,9 +298,6 @@ void vitalSigns(cmplx16ImRe_t *radarCube, uint16_t range, float *breathingRate, 
         phase[i] = DCPhaseRemove(&phase[i], &removeState[i]);
     }
 
-#if VITALSIGNS_TRACE_NONFINITE
-    traceStage(VS_STAGE_DCREMOVE, phase, range);
-#endif
 
     /*
      * Differencing the slow-time phase. The measured phase carries a drift
@@ -361,10 +310,6 @@ void vitalSigns(cmplx16ImRe_t *radarCube, uint16_t range, float *breathingRate, 
         prevPhase[i]  = current;
     }
 
-#if VITALSIGNS_TRACE_NONFINITE
-    traceStage(VS_STAGE_DIFF, phase, range);
-#endif
-
 
     /*
      * 2nd order elliptic (Cauer) bandpass filters along phase axis that filter
@@ -375,16 +320,6 @@ void vitalSigns(cmplx16ImRe_t *radarCube, uint16_t range, float *breathingRate, 
         ellipticFilter(&phase[i], &phaseBreathing[i], true, &breathingState[i]);
         ellipticFilter(&phase[i], &phaseHeartbeat[i], false, &heartbeatState[i]);
     }
-
-#if VITALSIGNS_TRACE_NONFINITE
-    traceStage(VS_STAGE_FILT_BR, phaseBreathing, range);
-    traceStage(VS_STAGE_FILT_HR, phaseHeartbeat, range);
-    if (faultStage != 0){
-        *breathingRate = (float) -(100 + faultStage);
-        *heartRate     = (float) faultBin;
-        return;
-    }
-#endif
 
 
     /*
@@ -433,30 +368,10 @@ void vitalSigns(cmplx16ImRe_t *radarCube, uint16_t range, float *breathingRate, 
      */
     spectrumValid = (breathingFFTState.sampleCount == N);
 
-#if VITALSIGNS_TRACE_NONFINITE
-    traceStage(VS_STAGE_FFT_IN, breathingFFTState.sampleBuffer, 2 * N);
-#endif
 
     vibrationFFT(phaseBreathing[breathingFFTState.chosenBin], wState.twiddle, samplesBreathing, &breathingFFTState);
     vibrationFFT(phaseHeartbeat[heartbeatFFTState.chosenBin], wState.twiddle, samplesHeartbeat, &heartbeatFFTState);
 
-#if VITALSIGNS_TRACE_NONFINITE
-    traceStage(VS_STAGE_SPECTRUM, samplesBreathing, N);
-    if (faultStage != 0){
-        if (faultStage == VS_STAGE_SPECTRUM){
-            /* Every upstream stage is finite, so report the scale of the two
-             * things the FFT actually consumes: the twiddle table (should be
-             * <= 1.0) and the slow-time window (should be a few radians). A
-             * NaN or a huge value in either names the culprit outright. */
-            *breathingRate = maxAbsOrNan(wState.twiddle, 2 * N);
-            *heartRate     = maxAbsOrNan(breathingFFTState.sampleBuffer, 2 * N);
-        } else {
-            *breathingRate = (float) -(100 + faultStage);
-            *heartRate     = (float) faultBin;
-        }
-        return;
-    }
-#endif
 
     if (!spectrumValid){
         /* 
@@ -489,7 +404,7 @@ void vitalSigns(cmplx16ImRe_t *radarCube, uint16_t range, float *breathingRate, 
 
 
     /*
-     * Store the last 15 values of breathingRate and heartRate in cache
+     * Store the last 15 values of breathingRate and heartRate in a buffer
      */
     breathHistory[rateHistoryIdx] = instBreathing;
     heartHistory[rateHistoryIdx]  = instHeart;

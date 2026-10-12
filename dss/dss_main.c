@@ -92,9 +92,7 @@
  * @brief move mean vector to L3SRAM 
  */
 #pragma DATA_SECTION(mean, ".l3ram");
-static cmplx16ImRe_t mean[256];
-
-
+static cmplx16ImRe_t mean[64];
 
 /**
  * @brief Task Priority settings:
@@ -291,6 +289,12 @@ static void MmwDemo_DPC_ObjectDetection_reportFxn
              * - notify sensor management task that DPC is started.
              *****************************************************************/
             DebugP_log0("DSSApp: DPM Report start\n");
+
+            
+            /*****************************************************************
+             * Reset the vital-signs chain on every sensor start
+             *****************************************************************/
+            vitalSignsInit();
             break;
         }
         case DPM_Report_NOTIFY_DPC_RESULT:
@@ -396,8 +400,19 @@ static void MmwDemo_DPC_ObjectDetection_processInterFrameBeginCallBackFxn
     Load_update();
     gMmwDssMCB.dataPathObj.subFrameStats[subFrameIndx].activeFrameCPULoad = Load_getCPULoad();
     
-    static cmplx16ImRe_t mean[64];
+
+    /*
+     * All chirps in a frame are summed and divided by a numChirpsPerFrame 
+     * - essentially a mean. Better than just to take one chirp and cheap.
+     * Suppresses noise via differencing -> increases SNR. 
+     * Filling the buffer with chirps from the same frame makes no sense:
+     * they are almost exactly identical
+     */
     meanChirps(radarCube, numRangeBins, numChirpsPerFrame, mean);
+    
+    /*
+     * The actual vital signs estimation algorithm. 
+     */
     vitalSigns(mean, numRangeBins, &gHSRAM.breathingRate, &gHSRAM.heartRate);
 }
 
