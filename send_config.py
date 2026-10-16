@@ -1,12 +1,4 @@
 #!/usr/bin/env python3
-"""Send an mmWave demo .cfg to the sensor's command port, one line at a time.
-
-The CLI echoes and parses asynchronously, so each command must be sent on its
-own and acknowledged ("Done") before the next one goes out -- batching lines
-causes them to collide and be rejected.
-
-usage: send_config.py <cfg-file> [command-port]
-"""
 
 import sys
 import time
@@ -20,13 +12,12 @@ CHAR_DELAY = 0.002             # inter-character gap; see send_command()
 
 
 def read_reply(ser, timeout=REPLY_TIMEOUT):
-    """Collect output until the prompt returns AND the line goes quiet.
-
-    The CLI emits its prompt more than once per command, so stopping at the
-    first prompt leaves bytes in flight; those then corrupt the *next* command
-    (the sensor drops its leading characters). Keep draining until nothing has
-    arrived for a short settle window.
-    """
+    # Collect output until the prompt returns AND the line goes quiet.
+    # The CLI emits its prompt more than once per command, so stopping at the
+    # first prompt leaves bytes in flight; those then corrupt the *next* command
+    # (the sensor drops its leading characters). Keep draining until nothing has
+    # arrived for a short settle window.
+    
     deadline = time.time() + timeout
     buf = ""
 

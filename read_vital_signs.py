@@ -48,22 +48,28 @@ def read_frame(ser):
     header = MAGIC_WORD + rest
     (_,_,_,_, _version, _totalPacketLen, _platform, _frameNumber, _timeCpuCycles, _numDetectedObj, numTLVs, _subFrameNumber) = struct.unpack(HEADER_STRUCT, header)
 
+    breathing_rate = None
+    heartrate = None
+
     for _ in range(numTLVs):
         tlv_header = ser.read(TLV_HEADER_LEN)
         if len(tlv_header) < TLV_HEADER_LEN:
             print("short TLV header, dropping the rest of the frame")
-            return
+            return None
 
         tlv_type, tlv_length = struct.unpack(TLV_HEADER_STRUCT, tlv_header)
         payload = ser.read(tlv_length)
+        if len(payload) < tlv_length:
+            print("short TLV payload, dropping the rest of the frame")
+            return None
 
-        if tlv_type == TLV_BREATHING_RATE:
+        if tlv_type == TLV_BREATHING_RATE and tlv_length == 4:
             (breathing_rate, ) = struct.unpack("<f", payload)
-            print(f"Breathing rate = {breathing_rate} breathes per minute")
 
-        if tlv_type == TLV_HEARTRATE:
+        if tlv_type == TLV_HEARTRATE and tlv_length == 4:
             (heartrate, )  = struct.unpack("<f", payload)
-            print(f"Heartrate = {heartrate} beats per minute")
+
+    return (breathing_rate, heartrate)
 
 
 def main():
@@ -75,7 +81,14 @@ def main():
     with serial.Serial(port, baudrate=DATA_PORT_BAUD, timeout=1) as ser:
         print(f"Listening on {port} at {DATA_PORT_BAUD} baudrate")
         while True:
-            read_frame(ser)
+            values = read_frame(ser)
+            if not values:
+                continue
+            breathing_rate, heartrate = values
+            if breathing_rate is not None:
+                print(f"Breathing rate = {breathing_rate} breathes per minute")
+            if heartrate is not None:
+                print(f"Heartrate = {heartrate} beats per minute")
 
 
 

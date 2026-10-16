@@ -23,8 +23,8 @@ times = deque(maxlen=N)
 br = deque(maxlen=N)
 hr = deque(maxlen=N)
 
-median_breathing = np.zeros(20)
-median_heartbeat = np.zeros(20)
+median_breathing = np.zeros(21)
+median_heartbeat = np.zeros(21)
 
 start = time.monotonic()
 
@@ -32,13 +32,19 @@ is_running = True
 
 def reader(port):
     i = 0
+    try:
+        _reader(port, i)
+    except Exception as exc:
+        print(f"reader thread stopped: {exc!r}")
 
+
+def _reader(port, i):
     with serial.Serial(port, baudrate=read_vital_signs.DATA_PORT_BAUD, timeout=1) as ser:
         while True:
             values = read_vital_signs.read_frame(ser)
             if values and None not in values:
-                if -5 <= (values[0] and values[1]) <= -1: # the board is still settling
-                    continue
+                if (-5 <= values[0] <= -1) or (-5 <= values[1] <= -1):
+                    continue                  # the board is still settling
 
                 if values[0] == -6:
                     median_breathing[i] = 0           # if board reports -6, it means that person is not detected, 
@@ -52,11 +58,11 @@ def reader(port):
 
                 i += 1
 
-                if i == 20:                           
-                    breathing_output = np.median(median_breathing)  # in order to suppress outliers, store 20 most recent
+                if i == 21:                           
+                    breathing_output = np.median(median_breathing)  # in order to suppress outliers, store 21 most recent
                     heartbeat_output = np.median(median_heartbeat)  # values and output the median
                                                                     # the buffer is cleared afterwards, so the plot receives
-                                                                    # new value every 20 * 100ms = 2s
+                                                                    # new value every 21 * 100ms = 2.1s
                     data_q.put((time.monotonic() - start, breathing_output, heartbeat_output))
                     i = 0
 
