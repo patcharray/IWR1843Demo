@@ -37,6 +37,8 @@ def reader(port):
         while True:
             values = read_vital_signs.read_frame(ser)
             if values and None not in values:
+                if -5 <= (values[0] and values[1]) <= -1: # the board is still settling
+                    continue
 
                 if values[0] == -6:
                     median_breathing[i] = 0           # if board reports -6, it means that person is not detected, 
@@ -147,9 +149,9 @@ def _reset():
     hr.clear()
 
 def _quit():
-    root.quit()     # stops mainloop
-    root.destroy()  # this is necessary on Windows to prevent
-                    # Fatal Python Error: PyEval_RestoreThread: NULL tstate
+    root.quit()                 # stops mainloop
+    root.destroy()              # this is necessary on Windows to prevent
+                                # Fatal Python Error: PyEval_RestoreThread: NULL tstate
 
 
 button_stop = tk.Button(master=content, text="Stop", command=_stop)
@@ -161,6 +163,8 @@ button_reset.grid(column=3, row=1, sticky="nsew", pady=5, padx=5)
 button_quit = tk.Button(master=content, text="Quit", command=_quit)
 button_quit.grid(column=4, row=1, sticky="nsew", pady=5, padx=5)
 
+root.update()
+root.minsize(root.winfo_width(), root.winfo_height())
 
 # Execute readout on a different thread
 threading.Thread(target=reader, args=("/dev/ttyACM1",), daemon=True).start()

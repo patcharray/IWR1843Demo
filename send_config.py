@@ -15,7 +15,8 @@ import serial
 
 COMMAND_BAUD = 115200          # mss_main.c: config->commandBaudRate
 DEFAULT_PORT = "/dev/ttyACM0"
-REPLY_TIMEOUT = 5.0            # sensorStart takes noticeably longer than the rest
+REPLY_TIMEOUT = 15.0           # sensorStart runs RF calibration; allow for it
+CHAR_DELAY = 0.002             # inter-character gap; see send_command()
 
 
 def read_reply(ser, timeout=REPLY_TIMEOUT):
@@ -28,31 +29,35 @@ def read_reply(ser, timeout=REPLY_TIMEOUT):
     """
     deadline = time.time() + timeout
     buf = ""
-    seen_prompt = False
-    quiet_since = None
 
+    # Wait for an actual terminator word, not just the prompt: the previous
+    # command's trailing prompt is often still in the buffer, and slow commands
+    # (sensorStart runs RF calibration for several seconds) would otherwise be
+    # declared failed before their reply arrives.
     while time.time() < deadline:
         chunk = ser.read(ser.in_waiting or 1).decode("utf-8", errors="replace")
         if chunk:
             buf += chunk
-            quiet_since = None
-            if "mmwDemo:/>" in buf:
-                seen_prompt = True
-        else:
-            now = time.time()
-            if quiet_since is None:
-                quiet_since = now
-            elif seen_prompt and (now - quiet_since) > 0.15:
+            if ("Done" in buf) or ("Error" in buf) or ("Ignored" in buf) \
+                    or ("not recognized" in buf):
                 break
+        else:
             time.sleep(0.01)
     return buf
 
 
 def send_command(ser, cmd):
+    # Send one character at a time with a short gap. The demo's CLI has no flow
+    # control and drops bytes that arrive while it is re-arming its UART read,
+    # which shows up as mangled commands ("flushCfg" arriving as "fg"). Pacing
+    # the characters is the only reliable way to avoid it.
+    #
     # No input flush here: the port must already be drained by the previous
     # read_reply, and flushing now would race with echo still arriving.
-    ser.write((cmd + "\r\n").encode())
-    ser.flush()
+    for ch in (cmd + "\r\n").encode():
+        ser.write(bytes([ch]))
+        ser.flush()
+        time.sleep(CHAR_DELAY)
     reply = read_reply(ser)
     time.sleep(0.05)   # let the receiver settle before the next command
 
