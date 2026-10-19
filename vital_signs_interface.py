@@ -116,7 +116,7 @@ rates = fig.subplots(2, 1, sharex=True)
 breathing_rate = rates[0]
 (br_line, ) = breathing_rate.plot([], [])
 breathing_rate.set_ylabel('Breathing Rate')
-breathing_rate.set_yticks(np.arange(0, 60.1, 12))
+breathing_rate.set_yticks(np.arange(5, 40.1, 5))
 
 heartrate = rates[1]
 (hr_line, ) = heartrate.plot([], [])
@@ -170,7 +170,7 @@ button_quit = tk.Button(master=content, text="Quit", command=_quit)
 button_quit.grid(column=4, row=1, sticky="nsew", pady=5, padx=5)
 
 root.update()
-root.minsize(root.winfo_width(), root.winfo_height())
+root.minsize(root.winfo_width() + 100, root.winfo_height())
 
 # Execute readout on a different thread
 threading.Thread(target=reader, args=("/dev/ttyACM1",), daemon=True).start()
