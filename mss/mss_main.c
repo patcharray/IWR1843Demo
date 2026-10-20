@@ -621,13 +621,13 @@
 #include <ti/utils/mathutils/mathutils.h>
 
 /* Demo Include Files */
-#include <ti/demo/xwr18xx/mmw/include/mmw_config.h>
+#include <mmw_config.h>
 #include <ti/demo/utils/mmwdemo_rfparser.h>
 #include <ti/demo/utils/mmwdemo_adcconfig.h>
 #include <ti/demo/utils/mmwdemo_monitor.h>
-#include <ti/demo/xwr18xx/mmw/include/mmw_output.h>
-#include <ti/demo/xwr18xx/mmw/mmw_res.h>
-#include <ti/demo/xwr18xx/mmw/mss/mmw_mss.h>
+#include <mmw_output.h>
+#include <mmw_res.h>
+#include <mmw_mss.h>
 #include <ti/board/antenna_geometry.h>
 #include <ti/demo/utils/mmwdemo_flash.h>
 
@@ -1169,7 +1169,7 @@ static void MmwDemo_measurementResultOutput(DPU_AoAProc_compRxChannelBiasCfg *co
 */
 static void MmwDemo_transmitProcessedOutput
 (
-    UART_Handle     uartHandle,
+    UART_Handle                         uartHandle,
     DPC_ObjectDetection_ExecuteResult   *result,
     MmwDemo_output_message_stats        *timingInfo
 )
@@ -1244,7 +1244,7 @@ static void MmwDemo_transmitProcessedOutput
                         (MMWAVE_SDK_VERSION_MAJOR << 24);
 
     packetLen = sizeof(MmwDemo_output_message_header);
-    if ((pGuiMonSel->detectedObjects == 1) || (pGuiMonSel->detectedObjects == 2) &&
+    if (((pGuiMonSel->detectedObjects == 1) || (pGuiMonSel->detectedObjects == 2)) &&
          (result->numObjOut > 0))
     {
         tl[tlvIdx].type = MMWDEMO_OUTPUT_MSG_DETECTED_POINTS;
@@ -1306,6 +1306,16 @@ static void MmwDemo_transmitProcessedOutput
         tlvIdx++;
     }
 
+    tl[tlvIdx].type = MMWDEMO_Output_MSG_BREATHING_RATE;
+    tl[tlvIdx].length = sizeof(float);
+    packetLen += sizeof(MmwDemo_output_message_tl) + tl[tlvIdx].length;
+    tlvIdx++;
+
+    tl[tlvIdx].type = MMWDEMO_OUTPUT_MSG_HEARTRATE;
+    tl[tlvIdx].length = sizeof(float);
+    packetLen += sizeof(MmwDemo_output_message_tl) + tl[tlvIdx].length;
+    tlvIdx++;
+
     header.numTLVs = tlvIdx;
     /* Round up packet length to multiple of MMWDEMO_OUTPUT_MSG_SEGMENT_LEN */
     header.totalPacketLen = MMWDEMO_OUTPUT_MSG_SEGMENT_LEN *
@@ -1320,7 +1330,7 @@ static void MmwDemo_transmitProcessedOutput
 
     tlvIdx = 0;
     /* Send detected Objects */
-    if ((pGuiMonSel->detectedObjects == 1) || (pGuiMonSel->detectedObjects == 2) &&
+    if (((pGuiMonSel->detectedObjects == 1) || (pGuiMonSel->detectedObjects == 2)) &&
         (result->numObjOut > 0))
     {
         UART_writePolling (uartHandle,
@@ -1431,6 +1441,26 @@ static void MmwDemo_transmitProcessedOutput
                            tl[tlvIdx].length);
         tlvIdx++;
     }
+
+    /* Send breathing rate */
+    UART_writePolling (uartHandle,
+                       (uint8_t*)&tl[tlvIdx],
+                       sizeof(MmwDemo_output_message_tl));
+
+    UART_writePolling (uartHandle, 
+                       (uint8_t*)&gHSRAM.breathingRate,
+                       tl[tlvIdx].length);
+    tlvIdx++;
+
+    /* Send heartrate */
+    UART_writePolling (uartHandle, 
+                       (uint8_t*)&tl[tlvIdx],
+                       sizeof(MmwDemo_output_message_tl));
+
+    UART_writePolling (uartHandle, 
+                       (uint8_t*)&gHSRAM.heartRate,
+                       tl[tlvIdx].length);
+    tlvIdx++;
 
     /* Send padding bytes */
     numPaddingBytes = MMWDEMO_OUTPUT_MSG_SEGMENT_LEN - (packetLen & (MMWDEMO_OUTPUT_MSG_SEGMENT_LEN-1));
@@ -2662,7 +2692,7 @@ static void MmwDemo_handleObjectDetResult
     int32_t     retVal;
     DPC_ObjectDetection_ExecuteResultExportedInfo exportInfo;
     DPC_ObjectDetection_ExecuteResult        *dpcResults;
-    MmwDemo_output_message_stats            *frameStats;
+    MmwDemo_output_message_stats             *frameStats;
     volatile uint32_t                        startTime;
     uint8_t                                  nextSubFrameIdx;
     uint8_t                                  numSubFrames;

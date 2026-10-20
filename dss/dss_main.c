@@ -71,7 +71,7 @@
 #include <ti/common/sys_common.h>
 #include <ti/common/mmwave_sdk_version.h>
 #include <ti/control/dpm/dpm.h>
-#include <ti/datapath/dpc/objectdetection/objdethwa/objectdetection.h>
+#include <objectdetection.h>
 #include <ti/drivers/soc/soc.h>
 #include <ti/drivers/esm/esm.h>
 #include <ti/drivers/osal/DebugP.h>
@@ -79,10 +79,20 @@
 
 /* Demo Include Files */
 #include <ti/demo/utils/mmwdemo_rfparser.h>
-#include <ti/demo/xwr18xx/mmw/include/mmw_output.h>
-#include <ti/demo/xwr18xx/mmw/include/mmw_config.h>
-#include <ti/demo/xwr18xx/mmw/dss/mmw_dss.h>
+#include <mmw_output.h>
+#include <mmw_config.h>
+#include <mmw_dss.h>
 #include <ti/utils/cycleprofiler/cycle_profiler.h>
+
+/* Vital Signs Estimation Include Files */
+#include <vitalsigns.h>
+#include <meanchirps.h>
+
+/**
+ * @brief move mean vector to L3SRAM 
+ */
+#pragma DATA_SECTION(mean, ".l3ram");
+static cmplx16ImRe_t mean[64];
 
 /**
  * @brief Task Priority settings:
@@ -90,7 +100,9 @@
 #define MMWDEMO_DPC_OBJDET_DPM_TASK_PRIORITY      5
 
 /*! L3 RAM buffer for object detection DPC */
-uint8_t gMmwL3[SOC_L3RAM_SIZE];
+#define MMWDEMO_VITALSIGNS_L3RAM_SIZE (80U * 1024U)
+
+uint8_t gMmwL3[SOC_L3RAM_SIZE - MMWDEMO_VITALSIGNS_L3RAM_SIZE];
 #ifndef SOC_XWR68XX
 /* EDMA 4K silicon bug related : Align heap to 4K address boundary so that
  * non heap related changes (such as program code) does not alter the 4K related
@@ -149,7 +161,7 @@ static void MmwDemo_DPC_ObjectDetection_reportFxn
     uint32_t    arg1
 );
 static void MmwDemo_DPC_ObjectDetection_processFrameBeginCallBackFxn(uint8_t subFrameIndx);
-static void MmwDemo_DPC_ObjectDetection_processInterFrameBeginCallBackFxn(uint8_t subFrameIndx);
+static void MmwDemo_DPC_ObjectDetection_processInterFrameBeginCallBackFxn(uint8_t subFrameIndx, cmplx16ImRe_t *radarCube, uint16_t numRangeBins, uint16_t numChirpsPerFrame);
 static void MmwDemo_updateObjectDetStats
 (
     DPC_ObjectDetection_Stats       *currDpcStats,
@@ -277,6 +289,12 @@ static void MmwDemo_DPC_ObjectDetection_reportFxn
              * - notify sensor management task that DPC is started.
              *****************************************************************/
             DebugP_log0("DSSApp: DPM Report start\n");
+
+            
+            /*****************************************************************
+             * Reset the vital-signs chain on every sensor start
+             *****************************************************************/
+            vitalSignsInit();
             break;
         }
         case DPM_Report_NOTIFY_DPC_RESULT:
@@ -370,10 +388,32 @@ static void MmwDemo_DPC_ObjectDetection_processFrameBeginCallBackFxn(uint8_t sub
  *
  *  @retval None
  */
-static void MmwDemo_DPC_ObjectDetection_processInterFrameBeginCallBackFxn(uint8_t subFrameIndx)
+static void MmwDemo_DPC_ObjectDetection_processInterFrameBeginCallBackFxn
+(
+    uint8_t             subFrameIndx,
+    cmplx16ImRe_t       *radarCube, 
+    uint16_t            numRangeBins,
+    uint16_t            numChirpsPerFrame
+)
 {
+
     Load_update();
     gMmwDssMCB.dataPathObj.subFrameStats[subFrameIndx].activeFrameCPULoad = Load_getCPULoad();
+    
+
+    /*
+     * All chirps in a frame are summed and divided by a numChirpsPerFrame 
+     * - essentially a mean. Better than just to take one chirp and cheap.
+     * Suppresses noise via differencing -> increases SNR. 
+     * Filling the buffer with chirps from the same frame makes no sense:
+     * they are almost exactly identical
+     */
+    meanChirps(radarCube, numRangeBins, numChirpsPerFrame, mean);
+    
+    /*
+     * The actual vital signs estimation algorithm. 
+     */
+    vitalSigns(mean, numRangeBins, &gHSRAM.breathingRate, &gHSRAM.heartRate);
 }
 
 
@@ -740,6 +780,10 @@ int main (void)
 
     /* Initialize and populate the demo MCB */
     memset ((void*)&gMmwDssMCB, 0, sizeof(MmwDemo_DSS_MCB));
+
+    
+    /* Initialize Vital Signs Estimation Algorithm */
+    vitalSignsInit();
 
     /* Initialize the SOC confiugration: */
     memset ((void *)&socCfg, 0, sizeof(SOC_Cfg));

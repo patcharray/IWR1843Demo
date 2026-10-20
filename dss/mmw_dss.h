@@ -50,7 +50,9 @@
 #include <ti/drivers/osal/DebugP.h>
 
 #include <ti/demo/xwr18xx/mmw/include/mmw_output.h>
-#include <ti/datapath/dpc/objectdetection/objdethwa/objectdetection.h>
+#include <objectdetection.h>
+#include <vitalsigns.h>
+
 
 /* This is used to resolve RL_MAX_SUBFRAMES, TODO: wired */
 #include <ti/control/mmwavelink/mmwavelink.h>

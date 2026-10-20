@@ -84,8 +84,14 @@ typedef enum MmwDemo_output_message_type_e
                  (all virtual antennas exported) - unused in this demo */
     MMWDEMO_OUTPUT_MSG_AZIMUT_ELEVATION_STATIC_HEAT_MAP,
 
-    /*! @brief   temperature stats from Radar front end */
+    /*! @brief   Temperature stats from Radar front end */
     MMWDEMO_OUTPUT_MSG_TEMPERATURE_STATS,
+
+    /*! @brief   Breathing rate in breaths per minute */
+    MMWDEMO_Output_MSG_BREATHING_RATE,
+
+    /*! @brief   Heartrate in beats per minute */
+    MMWDEMO_OUTPUT_MSG_HEARTRATE,
 
     MMWDEMO_OUTPUT_MSG_MAX
 } MmwDemo_output_message_type;
@@ -100,28 +106,28 @@ typedef enum MmwDemo_output_message_type_e
 typedef struct MmwDemo_output_message_header_t
 {
     /*! @brief   Output buffer magic word (sync word). It is initialized to  {0x0102,0x0304,0x0506,0x0708} */
-    uint16_t    magicWord[4];
+    uint16_t     magicWord[4];
 
-    /*! brief   Version: : MajorNum * 2^24 + MinorNum * 2^16 + BugfixNum * 2^8 + BuildNum   */
+    /*! @brief   Version: : MajorNum * 2^24 + MinorNum * 2^16 + BugfixNum * 2^8 + BuildNum   */
     uint32_t     version;
 
     /*! @brief   Total packet length including header in Bytes */
-    uint32_t    totalPacketLen;
+    uint32_t     totalPacketLen;
 
     /*! @brief   platform type */
-    uint32_t    platform;
+    uint32_t     platform;
     
     /*! @brief   Frame number */
-    uint32_t    frameNumber;
+    uint32_t     frameNumber;
 
     /*! @brief   Time in CPU cycles when the message was created. For XWR16xx/XWR18xx: DSP CPU cycles, for XWR14xx: R4F CPU cycles */
-    uint32_t    timeCpuCycles;
+    uint32_t     timeCpuCycles;
     
     /*! @brief   Number of detected objects */
-    uint32_t    numDetectedObj;
+    uint32_t     numDetectedObj;
 
     /*! @brief   Number of TLVs */
-    uint32_t    numTLVs;
+    uint32_t     numTLVs;
 
     /*! @brief   For Advanced Frame config, this is the sub-frame number in the range
      * 0 to (number of subframes - 1). For frame config (not advanced), this is always
@@ -163,7 +169,7 @@ typedef struct MmwDemo_output_message_stats_t
  *  Size of HSRAM Payload data array.
  */
 #define MMWDEMO_HSRAM_PAYLOAD_SIZE        (SOC_HSRAM_SIZE - sizeof(DPC_ObjectDetection_ExecuteResult) - \
-                                            sizeof(MmwDemo_output_message_stats))
+                                            sizeof(MmwDemo_output_message_stats) - 2 * sizeof(float))
 
 /**
  * @brief
@@ -176,6 +182,12 @@ typedef struct MmwDemo_HSRAM_t
 
     /*! @brief   Output message stats reported by DSS */
     MmwDemo_output_message_stats   outStats;
+
+    /*! @brief   Breathing rate of a person */
+    float     breathingRate;
+
+    /*! @brief   Heartrate of a person */
+    float     heartRate;
 
     /*! @brief   Payload data of result */
     uint8_t                        payload[MMWDEMO_HSRAM_PAYLOAD_SIZE];
