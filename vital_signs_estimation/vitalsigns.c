@@ -234,6 +234,7 @@ void vitalSignsInit(void){
     presenceEnergy = 0.0f;
     frameCount = 0;
     binLocked  = 0;
+    vibrationFFTInit();
 }
 
 
@@ -408,7 +409,7 @@ void vitalSigns(cmplx16ImRe_t *radarCube, uint16_t range, float *breathingRate, 
 
     /*
      * Mean-square of the filtered signal at the locked bin. Settles long
-     * before the 256-frame window fills, so it needs no warm-up of its own.
+     * before the 256-frame window fills, so it needs no warm-up of its own
      */
     {
         float v = phaseBreathing[breathingFFTState.chosenBin];
@@ -416,8 +417,10 @@ void vitalSigns(cmplx16ImRe_t *radarCube, uint16_t range, float *breathingRate, 
     }
 
     if (presenceEnergy < PRESENCE_ENERGY_MIN){
-        /* Static clutter only -- nobody there. Reporting a peak from noise
-         * would be indistinguishable from a real reading. */
+        /* 
+         * Static clutter only -> nobody there. Reporting a peak from noise
+         * would be indistinguishable from a real reading 
+         */
         *breathingRate = VS_STATE_NODETECT;
         *heartRate     = VS_STATE_NODETECT;
         return;
