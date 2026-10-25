@@ -25,12 +25,18 @@ typedef struct{           // Struct containing twiddle initialization
     int initialized;
 } twiddleState;
 
+typedef struct{
+    float window[N];
+    int initialized;
+} hannState;
+
 typedef struct{                // Struct containing FFT buffer and  
     float sampleBuffer[2 * N]; // bin for which the vibration (doppler) FFT
     int sampleCount;           // will execute
     int chosenBin;
-}   vibrationFFTState;
+} vibrationFFTState;
 
+void vibrationFFTInit(void);
 void gen_twiddle_fft_sp(float *w, int n, twiddleState *state);
 void vibrationFFT(float newSample, float *w, float *outputSpectrum, vibrationFFTState *state);
 

@@ -33,6 +33,13 @@ static unsigned char brev[64] = {
     0x7, 0x27, 0x17, 0x37, 0xf, 0x2f, 0x1f, 0x3f
 };
 
+#pragma DATA_SECTION(hState, ".l3ram");
+static hannState hState;
+
+void vibrationFFTInit(void){
+    memset(&hState, 0, sizeof(hState));
+}
+
 /*
  * Taken from ti/dsplib_c674x_3_4_0_0/examples/fft_sp_ex/fft_example_sp.c
  */
@@ -55,6 +62,20 @@ void gen_twiddle_fft_sp(float *w, int n, twiddleState *state)
 
 }
 
+static void hanning(float *input){
+    int i;
+    if (!hState.initialized){
+        hState.initialized = 1;
+        for(i = 0; i < N; i++){
+            hState.window[i] = (float)(0.5 * (1.0 - cos(2.0 * M_PI * (double)i / (double)N)));
+        }
+    }
+    for(i = 0; i < N; i++){
+        input[2 * i] = input[2 * i] * hState.window[i];
+        input[2 * i + 1] = input[2 * i + 1] * hState.window[i];
+    }
+}
+
 /***************************************************************************************************************
  *                                           DESCRIPTION 
  * Complex Radix-4 FFT over the samples of the chosen bin. Runs every sample, removing the oldest sample, 
@@ -73,6 +94,7 @@ void vibrationFFT(float newSample, float *w, float *outputSpectrum, vibrationFFT
         state->sampleBuffer[2 * (N - 1) + 1] = 0.0f;
         int i;
         memcpy(fftScratch, state->sampleBuffer, 2 * N * sizeof(float)); // Copies the buffer (see fftScratch description)
+        hanning(fftScratch);
         DSPF_sp_fftSPxSP(N, fftScratch, w, fftOutput, brev, 4, 0, N);
         for (i = 0; i < N; i++){ // Takes magnitude of each output sample (see fftOutput description)
             outputSpectrum[i] = sqrtsp(fftOutput[2 * i] * fftOutput[2 * i] + fftOutput[2 * i + 1] * fftOutput[2 * i + 1]);
