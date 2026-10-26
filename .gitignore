@@ -13,3 +13,7 @@ Release/
 
 # Generated Doxygen output
 docs/doxygen/html/
+
+# Agent/IDE config, provided by the CCS install
+.claude/
+CLAUDE.md
