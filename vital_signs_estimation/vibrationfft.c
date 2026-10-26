@@ -62,6 +62,11 @@ void gen_twiddle_fft_sp(float *w, int n, twiddleState *state)
 
 }
 
+/*
+ * Hann window implementation. Because the slow-time axis contains complex values, multiply both real and 
+ * imaginary parts of a sample with the same window coefficient.
+ */
+
 static void hanning(float *input){
     int i;
     if (!hState.initialized){
@@ -94,7 +99,7 @@ void vibrationFFT(float newSample, float *w, float *outputSpectrum, vibrationFFT
         state->sampleBuffer[2 * (N - 1) + 1] = 0.0f;
         int i;
         memcpy(fftScratch, state->sampleBuffer, 2 * N * sizeof(float)); // Copies the buffer (see fftScratch description)
-        hanning(fftScratch);
+        hanning(fftScratch); // windows the buffer to suppress strong interference signals
         DSPF_sp_fftSPxSP(N, fftScratch, w, fftOutput, brev, 4, 0, N);
         for (i = 0; i < N; i++){ // Takes magnitude of each output sample (see fftOutput description)
             outputSpectrum[i] = sqrtsp(fftOutput[2 * i] * fftOutput[2 * i] + fftOutput[2 * i + 1] * fftOutput[2 * i + 1]);
