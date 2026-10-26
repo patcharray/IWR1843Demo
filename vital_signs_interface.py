@@ -15,8 +15,9 @@ import threading
 import numpy as np
 from collections import deque
 
-N = 90          # number of samples visible on the plot
-WINDOW = 180    # maximal time interval of the plot
+N = 90            # number of samples visible on the plot
+WINDOW = 180      # maximal time interval of the plot
+SETTLE_TIME = 64  # settle time of the board
 
 data_q = queue.Queue()
 times = deque(maxlen=N)
@@ -28,7 +29,9 @@ median_heartbeat = np.zeros(21)
 
 start = time.monotonic()
 
-is_running = True
+is_running = False
+
+settling = True
 
 def reader(port):
     i = 0
@@ -37,12 +40,21 @@ def reader(port):
     except Exception as exc:
         print(f"reader thread stopped: {exc!r}")
 
+def end_settling():
+    global settling, start, is_running
+    settling = False
+    is_running = True
+    start = time.monotonic()
+    status_label.grid_remove()
 
 def _reader(port, i):
     with serial.Serial(port, baudrate=read_vital_signs.DATA_PORT_BAUD, timeout=1) as ser:
         while True:
             values = read_vital_signs.read_frame(ser)
             if values and None not in values:
+                if settling:
+                    continue
+
                 if (-5 <= values[0] <= -1) or (-5 <= values[1] <= -1):
                     continue                  # the board is still settling
 
@@ -132,6 +144,9 @@ toolbar = NavigationToolbar2Tk(canvas, content, pack_toolbar=False)
 toolbar.update()
 toolbar.grid(column=0, row=1, columnspan=2)
 
+status_label = ttk.Label(content, text=f"Board is settling...")
+status_label.grid(column=0, row=2, columnspan=5, pady=5)
+
 
 def on_key_press(event):
     print("you pressed {}".format(event.key))
@@ -145,14 +160,19 @@ def _stop():
     is_running = False
 
 def _reset():
-    global start                # resets the plot and wipes all queues clean
+    global start , is_running, settling      # resets the plot and wipes all queues clean
+    if settling:
+        return
     start = time.monotonic()
 
     with data_q.mutex:
         data_q.queue.clear()
-    times.clear()          
+    times.clear()
     br.clear()
     hr.clear()
+    is_running = True
+    update_plot()
+
 
 def _quit():
     root.quit()                 # stops mainloop
@@ -175,7 +195,7 @@ root.minsize(root.winfo_width() + 100, root.winfo_height())
 # Execute readout on a different thread
 threading.Thread(target=reader, args=("/dev/ttyACM1",), daemon=True).start()
 
-
+root.after(SETTLE_TIME * 1000, end_settling)
 root.after(100, running)
 tk.mainloop()
 # If you put root.destroy() here, it will cause an error if the window is
