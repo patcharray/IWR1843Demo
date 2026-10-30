@@ -17,11 +17,12 @@
 #define TRUE  1U
 #define FALSE 0U
 
-#define N 256 // Number of samples
+#define N 128           // Number of samples
+#define N_ZERO_PAD 256  // Number of samples after zero padding
 
 
 typedef struct{           // Struct containing twiddle initialization
-    float twiddle[2 * N];
+    float twiddle[2 * N_ZERO_PAD];
     int initialized;
 } twiddleState;
 

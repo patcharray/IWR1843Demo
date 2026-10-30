@@ -6,7 +6,7 @@
  */
 #pragma DATA_SECTION(fftOutput, ".l3ram");
 #pragma DATA_ALIGN(fftOutput, 8);
-static float fftOutput[2 * N];
+static float fftOutput[2 * N_ZERO_PAD];
 
 /* 
  * DSPF_sp_fftSPxSP() uses its "input" as in-place scratch: it writes its butterfly
@@ -15,7 +15,7 @@ static float fftOutput[2 * N];
  */
 #pragma DATA_SECTION(fftScratch, ".l3ram");
 #pragma DATA_ALIGN(fftScratch, 8);
-static float fftScratch[2 * N];
+static float fftScratch[2 * N_ZERO_PAD];
 
 /*
  * Radix-4 returns the coefficients in reverse order, the bit-reversal table (brev)
@@ -99,9 +99,10 @@ void vibrationFFT(float newSample, float *w, float *outputSpectrum, vibrationFFT
         state->sampleBuffer[2 * (N - 1) + 1] = 0.0f;
         int i;
         memcpy(fftScratch, state->sampleBuffer, 2 * N * sizeof(float)); // Copies the buffer (see fftScratch description)
-        hanning(fftScratch); // windows the buffer to suppress strong interference signals
-        DSPF_sp_fftSPxSP(N, fftScratch, w, fftOutput, brev, 4, 0, N);
-        for (i = 0; i < N; i++){ // Takes magnitude of each output sample (see fftOutput description)
+        hanning(fftScratch); // windows the N real samples, ahead of the zero padding
+        memset(fftScratch + 2 * N, 0, 2 * (N_ZERO_PAD - N) * sizeof(float)); // Zero padding -> interpolates the spectrum
+        DSPF_sp_fftSPxSP(N_ZERO_PAD, fftScratch, w, fftOutput, brev, 4, 0, N_ZERO_PAD);
+        for (i = 0; i < N_ZERO_PAD; i++){ // Takes magnitude of each output sample (see fftOutput description)
             outputSpectrum[i] = sqrtsp(fftOutput[2 * i] * fftOutput[2 * i] + fftOutput[2 * i + 1] * fftOutput[2 * i + 1]);
         }
 

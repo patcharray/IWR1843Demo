@@ -101,8 +101,8 @@
  * 26 (4.4 m) and bin 62 (10.5 m) on earlier runs. Widen RANGE_BIN_MAX if the
  * subject sits further away 
  */
-#define RANGE_BIN_MIN  3     // ~0.51 m
-#define RANGE_BIN_MAX  8     // ~1.42 m
+#define RANGE_BIN_MIN  2     // 0.7 m
+#define RANGE_BIN_MAX  4     // 1.4 m
 
 /* 
  * Median window over the reported rate.
@@ -198,8 +198,8 @@ static twiddleState wState;
 static vibrationFFTState breathingFFTState;
 #pragma DATA_ALIGN(heartbeatFFTState, 8);
 static vibrationFFTState heartbeatFFTState;
-static float samplesBreathing[N];
-static float samplesHeartbeat[N];
+static float samplesBreathing[N_ZERO_PAD];
+static float samplesHeartbeat[N_ZERO_PAD];
 static float breathHistory[RATE_MEDIAN_LEN];
 static float heartHistory[RATE_MEDIAN_LEN];
 #if !VITALSIGNS_DIAG
@@ -287,7 +287,7 @@ static float bandRate(const float *spectrum, int lo, int hi){
     if (!nonZero){
         return VS_STATE_SILENT;
     }
-    return (((float) findMaxBin(spectrum, lo, hi) * sampFreq) / N) * 60;
+    return (((float) findMaxBin(spectrum, lo, hi) * sampFreq) / N_ZERO_PAD) * 60;
 }
 
 
@@ -351,7 +351,7 @@ void vitalSigns(cmplx16ImRe_t *radarCube, uint16_t range, float *breathingRate, 
     /*
      * Generates "twiddle" factors needed for Radix-4 FFTs 
      */
-    gen_twiddle_fft_sp(wState.twiddle, N, &wState);
+    gen_twiddle_fft_sp(wState.twiddle, N_ZERO_PAD, &wState);
 
     frameCount++;
 
