@@ -94,17 +94,16 @@ python3 vital_signs_interface.py
 
 To see chirp/frame specifications, go to profiles/profile_2d.cfg and refer to the **MMWAVE SDK User Guide** as a reference.
 
-1. The search for the breathing and heartbeat amplitude is limited from bin 3 to bin 8 - approximately 0.5-1.4m. Tests discovered that **~0.7m is the optimal distance**
+1. The search for the breathing and heartbeat amplitude is limited from bin 2 to bin 4 - approximately 0.7-1.4m. Tests discovered that **~0.7m is the optimal distance**
 
 2. The test subject should be in a still position and **not move closer/farther from the radar** 
 
-3. The filters in the signal processing chain need time to settle to produce adequate output values and the FFT buffer needs ~26 seconds to be filled with values. The table below shows the stages, frames and approximate time.
+3. The filter in the signal processing chain needs time to settle to produce adequate output values and the FFT buffer needs ~13 seconds to be filled with values. The table below shows the stages, frames and approximate time.
 
 |**Stage**           |**Frames**   |**Time**  |
 |---                 |---          |---       |
-|Filter warm-up      |300          |30s       |
-|Range-bin selection |100          |10s       |
-|FFT window filling  |256          |25.6s     |
-|**Total**           |**656**      |**65.6s** |
+|Filter warm-up      |50           |5s        |
+|FFT window filling  |128          |12.8s     |
+|**Total**           |**178**      |**17.8s** |
 
 ***
