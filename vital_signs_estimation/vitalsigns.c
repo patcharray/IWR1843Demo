@@ -1,7 +1,7 @@
 /***************************************************************************************************************
  *                                           DESCRIPTION 
  * The signal processing chain for breathing rate and heartrate detection/estimation for stationary targets.
- * Begins to stream results ~30 seconds after startup every 100ms. That implies some limitations in detection
+0 * Begins to stream results ~18 seconds after startup every 100ms. That implies some limitations in detection
  * and tracking ability. For the specs of chirp/frame configuration, see profiles/profile_2d.cfg
  * 
  * 1. RANGE FFT
@@ -25,8 +25,8 @@
  *    and real target motion. Functions as an exact first-order high-pass that greatly supresses lower bins 
  *
  * 5. FILTERING (GETS CALLED EACH FRAME FOR EACH RANGE BIN ALONG SLOW-TIME AXIS ACROSS ALL SAMPLES)
- *    The phase samples get filtered by two elliptic bandpass filters tuned to a frequencies of breathing 
- *    and heartbeat, in order to get rid of the high-frequency noise
+ *    The phase samples get filtered by elliptic bandpass filter tuned to the frequency of heartbeat, in order to 
+ *    get rid of the high-frequency noise
  *
  * 6. PEAK DETECTION (GETS CALLED ONCE AFTER THE WARMUP FOR EACH RANGE BIN ALONG SLOW-TIME AXIS FOR THE FIRST SAMPLE)
  *    Because of the limitations of the hardware, not the whole range, but only the bin with the largest 
@@ -57,49 +57,31 @@
 
 /* 
  * The chain has to settle before any of it means anything:
- *  1. DCPhaseRemove is an EMA with alpha = 0.01, i.e. time constant ~ 10 s;
- *  2. the breathing SOS cascade has a pole radius of sqrt(0.96216) and needs
- *    ~26 s to settle.
+ * The heartbeat bandpass filter needs ~5s to settle
  * Feeding the vibration FFT before that just buries the band in transients
  */
-/* 
- * Diagnostic mode: instead of rates, stream the DC-removed unwrapped phase at
- * the locked range bin (float 1) and the locked bin index itself (float 2), so
- * the slow-time signal can be logged and analysed off-target. Set to 0 for
- * normal operation.
- */
-#define VITALSIGNS_DIAG 0
+#define WARMUP_FRAMES  50             /* 5 s at 10 Hz */
 
-#if VITALSIGNS_DIAG
-#define WARMUP_FRAMES  150             /* 15 s -> just the EMA, not the SOS */
-#else
-#define WARMUP_FRAMES  300             /* 30 s at 10 Hz */
-#endif
 
 /* 
  * Afterwards, accumulate filtered energy per range bin for this long and pick
  * the strongest bin ONCE. The bin must not move after that: the FFT window is
- * 256 samples of slow time, so re-selecting per frame splices unrelated bins
+ * 128 real samples and 128 zeros of slow time, so re-selecting per frame splices unrelated bins
  * into one window and destroys the coherence the FFT depends on 
  */
-#if VITALSIGNS_DIAG
-#define SELECT_FRAMES  50              /* 5 s at 10 Hz */
-#else
 #define SELECT_FRAMES  100             /* 10 s at 10 Hz */
-#endif
+
 
 /* 
  * Window of range bins the subject is expected to occupy.
- * Bin spacing follows from profileCfg: freqSlopeConst 100 MHz/us over an ADC
- * window of 64/7.2 MHz = 8.889 us gives a 888.9 MHz sweep, so
- *     dr = c / (2 * 888.9 MHz) = 0.168 m per bin
- * and the 64 bins span 10.8 m. 
+ * Bin spacing follows from profileCfg: freqSlopeConst 67 MHz/us over an ADC
+ * window of 64/10 MHz = 6.4 us gives a 428.8 MHz sweep, so
+ *     dr = c / (2 * 428.8 MHz) = 0.35 m per bin
+ * and the 64 bins span 22.4 m. 
  *
- * Bins 0:2 are dominated by TX->RX leakage -> large, nearly static phase that
+ * Bins 0 and 1 are dominated by TX->RX leakage -> large, nearly static phase that
  * would always win an energy contest. Beyond ~2 m there is nothing to measure
- * in a room, and letting the selector roam that far is how it locked onto bin
- * 26 (4.4 m) and bin 62 (10.5 m) on earlier runs. Widen RANGE_BIN_MAX if the
- * subject sits further away 
+ * in a room. Widen RANGE_BIN_MAX if the subject sits further away 
  */
 #define RANGE_BIN_MIN  2     // 0.7 m
 #define RANGE_BIN_MAX  4     // 1.4 m
@@ -107,7 +89,7 @@
 /* 
  * Median window over the reported rate.
  *
- * The slow-time window holds 256 samples and advances by one per frame, so
+ * The slow-time window holds 128 real and 128 zero samples and advances by one per frame, so
  * successive spectra are nearly identical and a one-frame jump in the argmax
  * is not a change in the signal -> it is two bins sitting nearly level with
  * noise deciding between them. A median rejects those isolated flips outright
@@ -129,47 +111,19 @@
 #define VS_STATE_NODETECT  (-6.0f)   // no subject in front of the sensor 
 
 
-/*
- * Presence gate.
- *
- * An empty room is trivially separable: with nobody present the bin
- * is dominated by *static* clutter whose phase does not change, so the
- * differenced phase collapses. Measured RMS of the filtered signal was 0.046
- * at worst with a subject present (breathing or holding) against 0.0054 at
- * best with the room empty -> an 8.5x gap. 
- *
- * The threshold is on the energy (geometric mean of the two populations), so
- * no square root is needed: 0.0158^2.
- */
 #define PRESENCE_ALPHA      0.02f
-#define PRESENCE_ENERGY_MIN 2.5e-4f
-
-
-/*
- * Temporary measurement build. The chain has no notion of "nobody is
- * breathing": findMaxBin answers which bin is largest, never whether there is
- * a peak at all, so a flat noise spectrum still yields a plausible rate. The
- * discriminator is the peak's height above the rest of the band -- a shape
- * measure, so unlike an absolute energy threshold it does not depend on range,
- * RCS or RX gain.
- *
- * With this set to 1 the heart-rate slot carries that ratio instead of a rate,
- * so the breathing and breath-hold populations can be read off the data port
- * and a threshold chosen from measurement rather than guesswork. Set to 0 to
- * restore normal operation.
- */
-#define VITALSIGNS_MEASURE_CONFIDENCE 0
+#define PRESENCE_ENERGY_MIN 4e-4f
 
 
 #pragma DATA_SECTION(phase, ".l3ram");
 #pragma DATA_SECTION(unwrapState, ".l3ram");
 #pragma DATA_SECTION(removeState, ".l3ram");
 #pragma DATA_SECTION(prevPhase, ".l3ram");
-#pragma DATA_SECTION(phaseBreathing, ".l3ram");
-#pragma DATA_SECTION(breathingState, ".l3ram");
+//#pragma DATA_SECTION(phaseBreathing, ".l3ram");
+//#pragma DATA_SECTION(breathingState, ".l3ram");
 #pragma DATA_SECTION(phaseHeartbeat, ".l3ram");
 #pragma DATA_SECTION(heartbeatState, ".l3ram");
-#pragma DATA_SECTION(energyBreathing, ".l3ram");
+//#pragma DATA_SECTION(energyBreathing, ".l3ram");
 // #pragma DATA_SECTION(energyHeartbeat, ".l3ram");      // the heartbeat signal is weak, so the bin localization  
 #pragma DATA_SECTION(wState, ".l3ram");                  // has been put solely on breathing signal
 #pragma DATA_SECTION(breathingFFTState, ".l3ram");
@@ -184,13 +138,13 @@ static float phase[MAX_RANGE];
 static phaseUnwrapState unwrapState[MAX_RANGE];
 static phaseRemoveState removeState[MAX_RANGE];
 static float prevPhase[MAX_RANGE];
-static float phaseBreathing[MAX_RANGE];
-#pragma DATA_ALIGN(breathingState, 8);
-static EllipticFilterState breathingState[MAX_RANGE];
+//static float phaseBreathing[MAX_RANGE];
+//#pragma DATA_ALIGN(breathingState, 8);
+//static EllipticFilterState breathingState[MAX_RANGE];
 static float phaseHeartbeat[MAX_RANGE];
 #pragma DATA_ALIGN(heartbeatState, 8);
 static EllipticFilterState heartbeatState[MAX_RANGE];
-static float energyBreathing[MAX_RANGE];
+//static float energyBreathing[MAX_RANGE];
 // static float energyHeartbeat[MAX_RANGE];
 #pragma DATA_ALIGN(wState, 8);
 static twiddleState wState;
@@ -208,7 +162,7 @@ static int rateHistoryIdx;
 #endif
 static float presenceEnergy;
 static int frameCount;
-static int binLocked;
+//static int binLocked;
 
 
 void vitalSignsInit(void){
@@ -216,11 +170,11 @@ void vitalSignsInit(void){
     memset(unwrapState, 0, sizeof(unwrapState));
     memset(removeState, 0, sizeof(removeState));
     memset(prevPhase, 0, sizeof(prevPhase));
-    memset(phaseBreathing, 0, sizeof(phaseBreathing));
+    //memset(phaseBreathing, 0, sizeof(phaseBreathing));
     memset(phaseHeartbeat, 0, sizeof(phaseHeartbeat));
-    memset(breathingState, 0, sizeof(breathingState));
+    //memset(breathingState, 0, sizeof(breathingState));
     memset(heartbeatState, 0, sizeof(heartbeatState));
-    memset(energyBreathing, 0, sizeof(energyBreathing));
+    //memset(energyBreathing, 0, sizeof(energyBreathing));
     // memset(energyHeartbeat, 0, sizeof(energyHeartbeat));
     memset(&wState, 0, sizeof(wState));
     memset(&breathingFFTState, 0, sizeof(breathingFFTState));
@@ -233,7 +187,7 @@ void vitalSignsInit(void){
     rateHistoryIdx = 0;
     presenceEnergy = 0.0f;
     frameCount = 0;
-    binLocked  = 0;
+    //binLocked  = 0;
     vibrationFFTInit();
 }
 
@@ -338,12 +292,10 @@ void vitalSigns(cmplx16ImRe_t *radarCube, uint16_t range, float *breathingRate, 
 
 
     /*
-     * 2nd order elliptic (Cauer) bandpass filters along phase axis that filter
-     * breathing and heartbreat respectfully
+     * 2nd order elliptic (Cauer) bandpass filter along phase axis that filters heartbeat
      * (implementation and detailed description in ellipticFilter.c and ellipticFilter.h)  
      */
     for (i = 0; i < range; i++){
-        ellipticFilter(&phase[i], &phaseBreathing[i], true, &breathingState[i]);
         ellipticFilter(&phase[i], &phaseHeartbeat[i], false, &heartbeatState[i]);
     }
 
@@ -361,6 +313,7 @@ void vitalSigns(cmplx16ImRe_t *radarCube, uint16_t range, float *breathingRate, 
         return;
     }
 
+    /*
     if (!binLocked){
         for (i = RANGE_BIN_MIN; i < range; i++){ // Phase can be negative -> abs()^2 to find the bin with biggest magnitude
             energyBreathing[i] += phaseBreathing[i] * phaseBreathing[i];
@@ -382,6 +335,7 @@ void vitalSigns(cmplx16ImRe_t *radarCube, uint16_t range, float *breathingRate, 
         binLocked = 1;
     }
 
+     */
 
     /* 
      * vibrationFFT only transforms once the window is already full on entry,
@@ -391,28 +345,28 @@ void vitalSigns(cmplx16ImRe_t *radarCube, uint16_t range, float *breathingRate, 
     spectrumValid = (breathingFFTState.sampleCount == N);
 
 
-    vibrationFFT(phaseBreathing[breathingFFTState.chosenBin], wState.twiddle, samplesBreathing, &breathingFFTState);
-    vibrationFFT(phaseHeartbeat[heartbeatFFTState.chosenBin], wState.twiddle, samplesHeartbeat, &heartbeatFFTState);
+    vibrationFFT(phase[2], wState.twiddle, samplesBreathing, &breathingFFTState);
+    vibrationFFT(phaseHeartbeat[2], wState.twiddle, samplesHeartbeat, &heartbeatFFTState);
 
 
     if (!spectrumValid){
         /* 
-         * The 256-sample slow-time window is not full yet. Pass the locked bin
+         * The 128-sample slow-time window is not full yet. Pass the locked bin
          * up - it is the one thing about the chain that cannot be
          * inferred from the rates
          */
         *breathingRate = VS_STATE_FILLING;
-        *heartRate     = (float) breathingFFTState.chosenBin;
+        *heartRate     = VS_STATE_FILLING;
         return;
     }
 
 
     /*
      * Mean-square of the filtered signal at the locked bin. Settles long
-     * before the 256-frame window fills, so it needs no warm-up of its own
+     * before the 128-frame window fills, so it needs no warm-up of its own
      */
     {
-        float v = phaseBreathing[breathingFFTState.chosenBin];
+        float v = phase[2];
         presenceEnergy += PRESENCE_ALPHA * ((v * v) - presenceEnergy);
     }
 
