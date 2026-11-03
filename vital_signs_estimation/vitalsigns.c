@@ -112,7 +112,7 @@
 
 
 #define PRESENCE_ALPHA      0.02f
-#define PRESENCE_ENERGY_MIN 5e-4f
+#define PRESENCE_ENERGY_MIN 4e-4f
 
 
 #pragma DATA_SECTION(phase, ".l3ram");
