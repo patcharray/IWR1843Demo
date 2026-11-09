@@ -12,6 +12,7 @@ import queue
 import time
 import serial
 import threading
+import sys
 import numpy as np
 from collections import deque
 from datetime import datetime
@@ -39,6 +40,8 @@ is_running = False
 settling = True
 
 new_entries = 0
+
+port = sys.argv[1] if len(sys.argv) > 1 else "/dev/ttyACM1"
 
 def reader(port):
     i = 0
@@ -242,7 +245,7 @@ root.update()
 root.minsize(root.winfo_width() + 150, root.winfo_height())
 
 # Execute readout on a different thread
-threading.Thread(target=reader, args=("/dev/ttyACM1",), daemon=True).start()
+threading.Thread(target=reader, args=(port,), daemon=True).start()
 
 root.after(SETTLE_TIME * 1000, end_settling)
 root.after(100, running)
