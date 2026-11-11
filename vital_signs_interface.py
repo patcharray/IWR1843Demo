@@ -17,8 +17,8 @@ import numpy as np
 from collections import deque
 from datetime import datetime
 
-N = 90                      # number of samples visible on the plot
-WINDOW = N * 2              # maximal time interval of the plot
+N = 180                     # number of samples visible on the plot
+WINDOW = N                  # maximal time interval of the plot
 SETTLE_TIME = 18            # settle time of the board
 AVG_COUNT = 15              # interval of log updates averaging
 MA_SAMPLES = 5              # number of samples used in moving average
@@ -30,8 +30,8 @@ hr = deque(maxlen=N)        # heartrate
 br_inter = deque(maxlen=N)
 hr_inter = deque(maxlen=N)
 
-median_breathing = np.zeros(21)
-median_heartbeat = np.zeros(21)
+median_breathing = np.zeros(41)
+median_heartbeat = np.zeros(41)
 
 start = time.monotonic()
 
@@ -80,11 +80,11 @@ def _reader(port, i):
 
                 i += 1
 
-                if i == 21:                           
+                if i == 41:                           
                     breathing_output = np.median(median_breathing)  # in order to suppress outliers, store 21 most recent
                     heartbeat_output = np.median(median_heartbeat)  # values and output the median
                                                                     # the buffer is cleared afterwards, so the plot receives
-                                                                    # new value every 21 * 100ms = 2.1s
+                                                                    # new value every 41 * 0.025s = 1.025s
                     data_q.put((time.monotonic() - start, breathing_output, heartbeat_output))
                     i = 0
 

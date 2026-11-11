@@ -47,7 +47,7 @@
 #include <vitalsigns.h>
 
 #define MAX_RANGE 64
-#define sampFreq 10
+#define sampFreq 40
 
 
 #define BREATH_BIN_MIN 3
@@ -60,7 +60,7 @@
  * The heartbeat bandpass filter needs ~5s to settle
  * Feeding the vibration FFT before that just buries the band in transients
  */
-#define WARMUP_FRAMES  50             /* 5 s at 10 Hz */
+#define WARMUP_FRAMES  200             /* 5 s at 40 Hz */
 
 
 /* 
@@ -96,7 +96,7 @@
  * while still passing a genuine step in rate, which an average would smear.
  * Odd length so the median is a real sample; 15 frames costs 0.75 s of lag 
  */
-#define RATE_MEDIAN_LEN 15
+#define RATE_MEDIAN_LEN 31
 
 /* 
  * Reported in place of a rate so the host can tell *why* there is no rate yet,
@@ -111,8 +111,8 @@
 #define VS_STATE_NODETECT  (-6.0f)   // no subject in front of the sensor 
 
 
-#define PRESENCE_ALPHA      0.02f
-#define PRESENCE_ENERGY_MIN 4e-4f
+#define PRESENCE_ALPHA      0.005f
+#define PRESENCE_ENERGY_MIN 2e-5f
 
 
 #pragma DATA_SECTION(phase, ".l3ram");
