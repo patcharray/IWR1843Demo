@@ -12,7 +12,7 @@ float DCPhaseRemove(float *inputPhase, phaseRemoveState *state){
         state->initialized = 1;
         return 0.0f;
     } else {
-        state->runningMean += 0.01 * (*inputPhase - state->runningMean); // 0.01 is the steepness factor 
-        return *inputPhase - state->runningMean;                         // Can be adjusted, but 0.01 works well
+        state->runningMean += 0.0025 * (*inputPhase - state->runningMean); // 0.025 is the steepness factor 
+        return *inputPhase - state->runningMean;                           // Can be adjusted, but 0.01 works well
     }
 }
