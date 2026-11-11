@@ -69,7 +69,7 @@
  * 128 real samples and 128 zeros of slow time, so re-selecting per frame splices unrelated bins
  * into one window and destroys the coherence the FFT depends on 
  */
-#define SELECT_FRAMES  100             /* 10 s at 10 Hz */
+#define SELECT_FRAMES  4000             /* 10 s at 40 Hz */
 
 
 /* 
@@ -89,12 +89,12 @@
 /* 
  * Median window over the reported rate.
  *
- * The slow-time window holds 128 real and 128 zero samples and advances by one per frame, so
+ * The slow-time window holds 512 real and 512 zero samples and advances by one per frame, so
  * successive spectra are nearly identical and a one-frame jump in the argmax
  * is not a change in the signal -> it is two bins sitting nearly level with
  * noise deciding between them. A median rejects those isolated flips outright
  * while still passing a genuine step in rate, which an average would smear.
- * Odd length so the median is a real sample; 15 frames costs 0.75 s of lag 
+ * Odd length so the median is a real sample; 31 frames costs 0.775 s of lag 
  */
 #define RATE_MEDIAN_LEN 31
 

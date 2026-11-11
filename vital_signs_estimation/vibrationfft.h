@@ -17,8 +17,8 @@
 #define TRUE  1U
 #define FALSE 0U
 
-#define N 128           // Number of samples
-#define N_ZERO_PAD 256  // Number of samples after zero padding
+#define N 512            // Number of samples
+#define N_ZERO_PAD 1024  // Number of samples after zero padding
 
 
 typedef struct{           // Struct containing twiddle initialization
