@@ -1,7 +1,7 @@
 /***************************************************************************************************************
  *                                           DESCRIPTION 
  * The signal processing chain for breathing rate and heartrate detection/estimation for stationary targets.
-0 * Begins to stream results ~18 seconds after startup every 100ms. That implies some limitations in detection
+ * Begins to stream results ~18 seconds after startup every 25ms. That implies some limitations in detection
  * and tracking ability. For the specs of chirp/frame configuration, see profiles/profile_2d.cfg
  * 
  * 1. RANGE FFT
@@ -40,7 +40,7 @@
  *    To find the target, the bin with the largest magnitude is chosen and multiplied by 60 (beats per minute)
  *
  * 9. MEDIAN (GETS CALLED AFTER THE SETTLING TIME ALONG FAST-TIME(SAMPLE) AXIS EVERY NEW SAMPLE)
- *    To minimize the impact of outliers (extraordinary high and low values), the last 15 values are stored in 
+ *    To minimize the impact of outliers (extraordinary high and low values), the last 31 values are stored in 
  *    a circular buffer, insertion sorted and median is taken
  *
  ***************************************************************************************************************/
@@ -50,26 +50,26 @@
 #define sampFreq 40
 
 
-#define BREATH_BIN_MIN 3
-#define BREATH_BIN_MAX 13
-#define HEART_BIN_MIN  17
-#define HEART_BIN_MAX  77
+#define BREATH_BIN_MIN 3               // 7 per minute
+#define BREATH_BIN_MAX 13              // 13 per minute
+#define HEART_BIN_MIN  17              // 40 per minute
+#define HEART_BIN_MAX  70              // 164 per minute
 
 /* 
  * The chain has to settle before any of it means anything:
- * The heartbeat bandpass filter needs ~5s to settle
+ * The heartbeat bandpass filter needs ~2.75s to settle
  * Feeding the vibration FFT before that just buries the band in transients
  */
-#define WARMUP_FRAMES  200             /* 5 s at 40 Hz */
+#define WARMUP_FRAMES  110             // 2.75 s at 40 Hz
 
 
 /* 
  * Afterwards, accumulate filtered energy per range bin for this long and pick
  * the strongest bin ONCE. The bin must not move after that: the FFT window is
- * 128 real samples and 128 zeros of slow time, so re-selecting per frame splices unrelated bins
+ * 512 real samples and 512 zeros of slow time, so re-selecting per frame splices unrelated bins
  * into one window and destroys the coherence the FFT depends on 
  */
-#define SELECT_FRAMES  4000             /* 10 s at 40 Hz */
+#define SELECT_FRAMES  800             // 2s at 40 Hz 
 
 
 /* 
@@ -124,7 +124,7 @@
 #pragma DATA_SECTION(phaseHeartbeat, ".l3ram");
 #pragma DATA_SECTION(heartbeatState, ".l3ram");
 //#pragma DATA_SECTION(energyBreathing, ".l3ram");
-// #pragma DATA_SECTION(energyHeartbeat, ".l3ram");      // the heartbeat signal is weak, so the bin localization  
+//#pragma DATA_SECTION(energyHeartbeat, ".l3ram");       // the heartbeat signal is weak, so the bin localization  
 #pragma DATA_SECTION(wState, ".l3ram");                  // has been put solely on breathing signal
 #pragma DATA_SECTION(breathingFFTState, ".l3ram");
 #pragma DATA_SECTION(heartbeatFFTState, ".l3ram");
@@ -175,7 +175,7 @@ void vitalSignsInit(void){
     //memset(breathingState, 0, sizeof(breathingState));
     memset(heartbeatState, 0, sizeof(heartbeatState));
     //memset(energyBreathing, 0, sizeof(energyBreathing));
-    // memset(energyHeartbeat, 0, sizeof(energyHeartbeat));
+    //memset(energyHeartbeat, 0, sizeof(energyHeartbeat));
     memset(&wState, 0, sizeof(wState));
     memset(&breathingFFTState, 0, sizeof(breathingFFTState));
     memset(&heartbeatFFTState, 0, sizeof(heartbeatFFTState));
@@ -215,7 +215,7 @@ static float medianOf(const float *history, int n){
 
 /* 
  * Peak bin -> rate in units per minute, but first separate a genuine peak from
- * the two degenerate cases that both collapse onto the band's lowest bin: a
+ * the two extreme cases that both collapse onto the band's lowest bin: a
  * spectrum poisoned by NaN/Inf, and one that is identically zero. Without this
  * the two are indistinguishable from a real reading at the band edge 
  */
@@ -351,7 +351,7 @@ void vitalSigns(cmplx16ImRe_t *radarCube, uint16_t range, float *breathingRate, 
 
     if (!spectrumValid){
         /* 
-         * The 128-sample slow-time window is not full yet. Pass the locked bin
+         * The 512-sample slow-time window is not full yet. Pass the locked bin
          * up - it is the one thing about the chain that cannot be
          * inferred from the rates
          */
@@ -363,7 +363,7 @@ void vitalSigns(cmplx16ImRe_t *radarCube, uint16_t range, float *breathingRate, 
 
     /*
      * Mean-square of the filtered signal at the locked bin. Settles long
-     * before the 128-frame window fills, so it needs no warm-up of its own
+     * before the 512-frame window fills, so it needs no warm-up of its own
      */
     {
         float v = phase[2];
@@ -400,7 +400,7 @@ void vitalSigns(cmplx16ImRe_t *radarCube, uint16_t range, float *breathingRate, 
 
 
     /*
-     * Store the last 15 values of breathingRate and heartRate in a buffer
+     * Store the last 31 values of breathingRate and heartRate in a buffer
      */
     breathHistory[rateHistoryIdx] = instBreathing;
     heartHistory[rateHistoryIdx]  = instHeart;
@@ -410,7 +410,7 @@ void vitalSigns(cmplx16ImRe_t *radarCube, uint16_t range, float *breathingRate, 
     }
 
     /*
-     * To suppress outliers, the median of last 15 values is taken
+     * To suppress outliers, the median of last 31 values is taken
      */
     *breathingRate = medianOf(breathHistory, rateHistoryLen);
     *heartRate     = medianOf(heartHistory, rateHistoryLen);
