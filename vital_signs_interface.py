@@ -19,7 +19,7 @@ from datetime import datetime
 
 N = 180                     # number of samples visible on the plot
 WINDOW = N                  # maximal time interval of the plot
-SETTLE_TIME = 18            # settle time of the board
+SETTLE_TIME = 17            # settle time of the board
 AVG_COUNT = 15              # interval of log updates averaging
 MA_SAMPLES = 5              # number of samples used in moving average
 
